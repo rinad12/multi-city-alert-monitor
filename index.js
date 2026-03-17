@@ -91,10 +91,7 @@ const CITY_MAP = {
   'גן יבנה': 'Ган-Явне',
   'יבנה': 'Явне',
   'גדרה': 'Гедера',
-  'רמלה': 'Рамла',
   'מזכרת בתיה': 'Мазкерет-Батья',
-  'גן יבנה': 'Ган-Явне',
-  'אשקלון': 'Ашкелон',
   'קרית מלאכי': 'Кирьят-Малахи',
   'ספיר': 'Сапир',
   'מעלה אדומים': 'Маале-Адумим',
@@ -119,57 +116,139 @@ const CITY_MAP = {
   'חוף אשקלון': 'Побережье Ашкелона',
 };
 
-/**
- * Returns a Russian name for a Hebrew city, falling back to the original
- * Hebrew name if no mapping exists.
- */
 function toRussian(hebrewCity) {
   return CITY_MAP[hebrewCity] || hebrewCity;
 }
 
-// ── Message formatting ────────────────────────────────────────────────────────
+// ── Alert type → Russian message ──────────────────────────────────────────────
 
-function buildMessage(cityHebrew) {
+// Alert types ending in "Drill" are silently skipped.
+const DRILL_SUFFIX = 'Drill';
+
+// Keywords in `alert.instructions` that signal newsFlash phase.
+const INSTRUCTIONS_ALL_CLEAR = ['ניתן לצאת', 'הסתיים'];
+
+function containsAny(text, keywords) {
+  if (!text) return false;
+  return keywords.some((kw) => text.includes(kw));
+}
+
+/**
+ * Builds a Russian Telegram message based on alert type and instructions.
+ * Returns null for drill alerts (caller should skip).
+ */
+function buildMessage(cityHebrew, alert) {
   const cityRu = toRussian(cityHebrew);
-  return (
-    `🚨 *ТРЕВОГА: ${cityRu}* 🚨\n\n` +
-    `Это сообщение отправлено автоматически, так как в этом районе сработала сирена. ` +
-    `Пожалуйста, не волнуйтесь, я следую инструкциям безопасности и нахожусь в защищённом пространстве.`
-  );
+  const type = alert.type || 'unknown';
+  const instructions = alert.instructions || '';
+
+  // Skip drills silently
+  if (type.endsWith(DRILL_SUFFIX)) return null;
+
+  switch (type) {
+    case 'missiles':
+      return (
+        `🚀 *РАКЕТНЫЙ ОБСТРЕЛ: ${cityRu}* 🚨\n\n` +
+        `Пожалуйста, не волнуйтесь: сработала сирена, и я уже в безопасном месте. ` +
+        `Здесь я не смогу отвечать на звонки до окончания инцидента. ` +
+        `Всё под контролем, напишу сразу, как выйду!`
+      );
+
+    case 'hostileAircraftIntrusion':
+      return (
+        `✈️ *ВОЗДУШНАЯ УГРОЗА: ${cityRu}* 🚨\n\n` +
+        `В небе замечен подозрительный объект. Я уже в защищённом пространстве, здесь безопасно. ` +
+        `Просто следую протоколу безопасности и жду отбоя.`
+      );
+
+    case 'earthQuake':
+      return (
+        `🫨 *ЗЕМЛЕТРЯСЕНИЕ: ${cityRu}* 🚨\n\n` +
+        `Зафиксированы подземные толчки. Я вышел на открытое пространство, как того требует инструкция. ` +
+        `Со мной всё хорошо, не переживайте!`
+      );
+
+    case 'terroristInfiltration':
+      return (
+        `🪖 *БЕЗОПАСНОСТЬ: ${cityRu}* 🚨\n\n` +
+        `Подозрение на проникновение в район. Я дома, двери заперты, всё в порядке. ` +
+        `Нахожусь в защищённой комнате и следую указаниям.`
+      );
+
+    case 'tsunami':
+      return (
+        `🌊 *УГРОЗА ЦУНАМИ: ${cityRu}* 🚨\n\n` +
+        `Поступило предупреждение о цунами. Я отошёл от береговой линии на безопасное расстояние. ` +
+        `Всё под контролем.`
+      );
+
+    case 'hazardousMaterials':
+    case 'radiologicalEvent':
+      return (
+        `⚠️ *ТЕХНОГЕННАЯ ОПАСНОСТЬ: ${cityRu}* 🚨\n\n` +
+        `Сообщается об утечке опасных веществ. Я плотно закрыл окна и нахожусь в помещении. ` +
+        `Со мной всё в порядке, просто меры предосторожности.`
+      );
+
+    case 'newsFlash':
+      if (containsAny(instructions, INSTRUCTIONS_ALL_CLEAR)) {
+        return (
+          `✅ *ОТБОЙ / МОЖНО ВЫХОДИТЬ: ${cityRu}* ✅\n\n` +
+          `Служба тыла подтвердила окончание инцидента. Можно выходить из убежища. 😊`
+        );
+      }
+      // Default newsFlash (shelter / take cover)
+      return (
+        `🔔 *УВЕДОМЛЕНИЕ: ${cityRu}* 🔔\n\n` +
+        `Поступило указание быть рядом с защищённым пространством. ` +
+        `Я уже рядом, всё в порядке, просто меры предосторожности.`
+      );
+
+    default:
+      return (
+        `🚨 *ТРЕВОГА: ${cityRu}* 🚨\n\n` +
+        `Это сообщение отправлено автоматически — в районе сработала сирена. ` +
+        `Я следую инструкциям безопасности и нахожусь в защищённом пространстве.`
+      );
+  }
 }
 
 // ── Deduplication ─────────────────────────────────────────────────────────────
 //
-// Key: Hebrew zone string → timestamp of first notification.
-// Pruned after DEDUP_TTL_MS so a new alert later in the day is not dropped.
+// Key: `${type}_${instructions}_${zone}` — ensures each distinct phase of an
+// incident (e.g., alert → all-clear) sends its own notification.
+// Entries are pruned after DEDUP_TTL_MS.
 
 const DEDUP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const sentAlerts = new Map();
 
-function isDuplicate(zone) {
-  const ts = sentAlerts.get(zone);
+function dedupKey(alert, zone) {
+  return `${alert.type || ''}_${alert.instructions || ''}_${zone}`;
+}
+
+function isDuplicate(key) {
+  const ts = sentAlerts.get(key);
   if (!ts) return false;
   if (Date.now() - ts > DEDUP_TTL_MS) {
-    sentAlerts.delete(zone);
+    sentAlerts.delete(key);
     return false;
   }
   return true;
 }
 
-function markSent(zone) {
-  sentAlerts.set(zone, Date.now());
+function markSent(key) {
+  sentAlerts.set(key, Date.now());
 }
 
 // ── Telegram send with retry ──────────────────────────────────────────────────
 
-async function sendNotification(cityHebrew) {
-  const message = buildMessage(cityHebrew);
+async function sendNotification(message, label) {
   const MAX_RETRIES = 3;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       await bot.telegram.sendMessage(CHANNEL_ID, message, { parse_mode: 'Markdown' });
-      console.log(`[INFO] Notification sent for zone: ${cityHebrew}`);
+      console.log(`[INFO] Notification sent: ${label}`);
       return;
     } catch (err) {
       const isLast = attempt === MAX_RETRIES;
@@ -183,9 +262,8 @@ async function sendNotification(cityHebrew) {
 
 // ── Polling ───────────────────────────────────────────────────────────────────
 //
-// pikud-haoref-api exports getActiveRocketAlertZones(callback).
-// Callback receives (err, alertZones) where alertZones is a plain string[]
-// of Hebrew zone names, e.g. ["בת ים", "חיפה 75"].
+// getActiveAlerts(callback) → callback(err, alerts[])
+// Each alert: { type, cities, instructions, id }
 // Empty array = no active alerts.
 
 const POLL_INTERVAL_MS = 1000;
@@ -195,23 +273,40 @@ function sleep(ms) {
 }
 
 function poll() {
-  pikudHaoref.getActiveRocketAlertZones((err, alertZones) => {
+  pikudHaoref.getActiveAlerts((err, alerts) => {
     if (err) {
       console.error(`[ERROR] Failed to fetch alerts: ${err.message || err}`);
       return;
     }
 
-    if (!Array.isArray(alertZones) || alertZones.length === 0) return;
+    if (!Array.isArray(alerts) || alerts.length === 0) return;
 
-    for (const zone of alertZones) {
-      if (!TARGET_CITIES.has(zone)) continue;
-      if (isDuplicate(zone)) continue;
+    for (const alert of alerts) {
+      console.log('[DEBUG] Full Alert Object:', JSON.stringify(alert, null, 2));
 
-      markSent(zone);
+      if (!Array.isArray(alert.cities)) continue;
 
-      sendNotification(zone).catch((e) =>
-        console.error(`[ERROR] Unexpected error in sendNotification: ${e.message}`)
-      );
+      // Skip drills before doing anything else
+      if ((alert.type || '').endsWith(DRILL_SUFFIX)) {
+        console.log(`[INFO] Drill alert skipped (type: ${alert.type})`);
+        continue;
+      }
+
+      for (const city of alert.cities) {
+        if (!TARGET_CITIES.has(city)) continue;
+
+        const key = dedupKey(alert, city);
+        if (isDuplicate(key)) continue;
+
+        const message = buildMessage(city, alert);
+        if (!message) continue; // null = drill, skip
+
+        markSent(key);
+
+        sendNotification(message, `${alert.type} / ${city}`).catch((e) =>
+          console.error(`[ERROR] Unexpected error in sendNotification: ${e.message}`)
+        );
+      }
     }
   });
 }
@@ -234,7 +329,8 @@ bot.telegram
 
 setInterval(poll, POLL_INTERVAL_MS);
 
-// Graceful shutdown
+// ── Graceful shutdown ─────────────────────────────────────────────────────────
+
 async function shutdown(signal) {
   console.log(`\n[INFO] ${signal} received, shutting down.`);
   try {
