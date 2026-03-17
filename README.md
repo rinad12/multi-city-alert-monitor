@@ -11,9 +11,28 @@ A Telegram bot for real-time alert monitoring in specific Israeli cities with Ru
 - Polls the Israeli Home Front Command (Pikud HaOref) API every **1 second**
 - Filters alerts to only the cities you care about
 - Translates Hebrew city names to **Russian**
-- Sends a calm, reassuring message to a Telegram channel or group
+- Handles **all alert types** with tailored Russian messages per incident category
+- Detects **newsFlash phase** (shelter vs. all-clear) from Hebrew instruction text
+- **Silently skips drills** — no unnecessary stress for family abroad
 - **Deduplicates** alerts — one notification per unique alert event, no spam
-- Graceful error handling with automatic retry for Telegram delivery failures
+- Sends startup (`✅ Бот запущен`) and shutdown (`🔴 Бот остановлен`) notifications
+- Graceful error handling: malformed API responses are silently skipped; exponential backoff after 3 consecutive failures
+
+---
+
+## Alert types & Russian messages
+
+| Type | Message |
+|---|---|
+| `missiles` | 🚀 РАКЕТНЫЙ ОБСТРЕЛ — я в убежище, не смогу отвечать на звонки |
+| `hostileAircraftIntrusion` | ✈️ ВОЗДУШНАЯ УГРОЗА — в защищённом пространстве, жду отбоя |
+| `earthQuake` | 🫨 ЗЕМЛЕТРЯСЕНИЕ — вышел на открытое место, всё хорошо |
+| `terroristInfiltration` | 🪖 БЕЗОПАСНОСТЬ — дома, двери заперты |
+| `tsunami` | 🌊 УГРОЗА ЦУНАМИ — отошёл от берега |
+| `hazardousMaterials` / `radiologicalEvent` | ⚠️ ТЕХНОГЕННАЯ ОПАСНОСТЬ — окна закрыты, в помещении |
+| `newsFlash` + shelter keywords | 🔔 УВЕДОМЛЕНИЕ — быть рядом с убежищем |
+| `newsFlash` + all-clear keywords | ✅ ОТБОЙ — можно выходить 😊 |
+| `*Drill` | *(пропускается молча)* |
 
 ---
 
@@ -81,20 +100,21 @@ You should see:
 ```
 [INFO] Starting custom-israel-alerts-notifier…
 [INFO] Monitoring cities: אשקלון, אשדוד, שדרות
+[INFO] Startup notification sent.
 ```
 
 ---
 
-## Notification message (Russian)
+## Console output
 
-When an alert fires for a monitored city the following message is sent:
+The console is intentionally quiet. Output only appears when relevant:
 
-```
-🚨 ТРЕВОГА: Ашкелон 🚨
-
-Это сообщение отправлено автоматически, так как в этом районе сработала сирена.
-Пожалуйста, не волнуйтесь, я следую инструкциям безопасности и нахожусь в защищённом пространстве.
-```
+| Log level | When |
+|---|---|
+| `[INFO]` | Startup, shutdown, notification sent |
+| `[DEBUG]` | Full alert object — only when a target city is affected |
+| `[WARN]` | API returning malformed JSON 3+ times in a row (5s backoff) |
+| `[ERROR]` | Real network failures or Telegram send failures |
 
 ---
 
@@ -142,7 +162,7 @@ custom-israel-alerts-notifier/
 
 | Package | Purpose |
 |---|---|
-| [`pikud-haoref-api`](https://www.npmjs.com/package/pikud-haoref-api) | Unofficial wrapper for the Pikud HaOref alert API |
+| [`pikud-haoref-api`](https://github.com/eladnava/pikud-haoref-api) | Unofficial wrapper for the Pikud HaOref alert API (installed from GitHub) |
 | [`telegraf`](https://telegraf.js.org/) | Telegram Bot framework for Node.js |
 | [`dotenv`](https://github.com/motdotla/dotenv) | Load environment variables from `.env` |
 
