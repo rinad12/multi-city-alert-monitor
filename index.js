@@ -2,6 +2,13 @@
 
 require('dotenv').config();
 
+// Suppress verbose debug logs emitted by pikud-haoref-api internals
+const _origLog = console.log.bind(console);
+console.log = (...args) => {
+  if (typeof args[0] === 'string' && args[0].startsWith('[Pikud Haoref API]')) return;
+  _origLog(...args);
+};
+
 const pikudHaoref = require('pikud-haoref-api');
 const { Telegraf } = require('telegraf');
 
