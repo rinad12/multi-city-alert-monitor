@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "dotenv": "^16.4.5",
-    "pikud-haoref-api": "^1.0.1",
+    "pikud-haoref-api": "github:eladnava/pikud-haoref-api",
     "telegraf": "^4.16.3"
   },
   "keywords": [
