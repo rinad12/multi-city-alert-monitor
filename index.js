@@ -267,7 +267,7 @@ async function sendNotification(message, label) {
 // Each alert: { type, cities, instructions, id }
 // Empty array = no active alerts.
 
-const POLL_INTERVAL_MS = 1000;
+const POLL_INTERVAL_MS = 2000;
 const BACKOFF_INTERVAL_MS = 5000;
 const BACKOFF_THRESHOLD = 3;
 

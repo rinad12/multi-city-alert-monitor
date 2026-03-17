@@ -8,7 +8,7 @@ A Telegram bot for real-time alert monitoring in specific Israeli cities with Ru
 
 ## Features
 
-- Polls the Israeli Home Front Command (Pikud HaOref) API every **1 second**
+- Polls the Israeli Home Front Command (Pikud HaOref) API every **2 seconds**
 - Filters alerts to only the cities you care about
 - Translates Hebrew city names to **Russian**
 - Handles **all alert types** with tailored Russian messages per incident category
