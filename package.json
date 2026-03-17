@@ -1,0 +1,27 @@
+{
+  "name": "custom-israel-alerts-notifier",
+  "version": "1.0.0",
+  "description": "A Telegram bot for real-time alert monitoring in specific Israeli cities with Russian notifications. Designed to keep family members informed when I am in a bomb shelter and unable to communicate.",
+  "main": "index.js",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "pikud-haoref-api": "^1.0.1",
+    "telegraf": "^4.16.3"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "israel",
+    "pikud-haoref",
+    "alerts",
+    "notifications"
+  ],
+  "author": "",
+  "license": "MIT"
+}
