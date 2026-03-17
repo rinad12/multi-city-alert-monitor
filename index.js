@@ -282,24 +282,22 @@ function poll() {
     if (!Array.isArray(alerts) || alerts.length === 0) return;
 
     for (const alert of alerts) {
-      console.log('[DEBUG] Full Alert Object:', JSON.stringify(alert, null, 2));
-
       if (!Array.isArray(alert.cities)) continue;
-
-      // Skip drills before doing anything else
-      if ((alert.type || '').endsWith(DRILL_SUFFIX)) {
-        console.log(`[INFO] Drill alert skipped (type: ${alert.type})`);
-        continue;
-      }
 
       for (const city of alert.cities) {
         if (!TARGET_CITIES.has(city)) continue;
+
+        // Only log when this alert concerns one of our target cities
+        console.log('[DEBUG] Full Alert Object:', JSON.stringify(alert, null, 2));
+
+        // Skip drills silently
+        if ((alert.type || '').endsWith(DRILL_SUFFIX)) continue;
 
         const key = dedupKey(alert, city);
         if (isDuplicate(key)) continue;
 
         const message = buildMessage(city, alert);
-        if (!message) continue; // null = drill, skip
+        if (!message) continue;
 
         markSent(key);
 
