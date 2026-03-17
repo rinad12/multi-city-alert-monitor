@@ -140,31 +140,24 @@ function buildMessage(cityHebrew) {
 
 // ── Deduplication ─────────────────────────────────────────────────────────────
 //
-// Key format: "<alertId|type:cities>" → timestamp of first notification.
-// Entries are pruned after DEDUP_TTL_MS so a genuinely new alert on the same
-// city later in the day is not silently dropped.
+// Key: Hebrew zone string → timestamp of first notification.
+// Pruned after DEDUP_TTL_MS so a new alert later in the day is not dropped.
 
 const DEDUP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const sentAlerts = new Map();
 
-function alertKey(alert) {
-  if (alert.id) return `id:${alert.id}`;
-  const sortedCities = [...(alert.cities || [])].sort().join(',');
-  return `${alert.type}:${sortedCities}`;
-}
-
-function isDuplicate(key) {
-  const ts = sentAlerts.get(key);
+function isDuplicate(zone) {
+  const ts = sentAlerts.get(zone);
   if (!ts) return false;
   if (Date.now() - ts > DEDUP_TTL_MS) {
-    sentAlerts.delete(key);
+    sentAlerts.delete(zone);
     return false;
   }
   return true;
 }
 
-function markSent(key) {
-  sentAlerts.set(key, Date.now());
+function markSent(zone) {
+  sentAlerts.set(zone, Date.now());
 }
 
 // ── Telegram send with retry ──────────────────────────────────────────────────
@@ -176,7 +169,7 @@ async function sendNotification(cityHebrew) {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       await bot.telegram.sendMessage(CHANNEL_ID, message, { parse_mode: 'Markdown' });
-      console.log(`[INFO] Notification sent for city: ${cityHebrew}`);
+      console.log(`[INFO] Notification sent for zone: ${cityHebrew}`);
       return;
     } catch (err) {
       const isLast = attempt === MAX_RETRIES;
@@ -189,6 +182,11 @@ async function sendNotification(cityHebrew) {
 }
 
 // ── Polling ───────────────────────────────────────────────────────────────────
+//
+// pikud-haoref-api exports getActiveRocketAlertZones(callback).
+// Callback receives (err, alertZones) where alertZones is a plain string[]
+// of Hebrew zone names, e.g. ["בת ים", "חיפה 75"].
+// Empty array = no active alerts.
 
 const POLL_INTERVAL_MS = 1000;
 
@@ -197,41 +195,23 @@ function sleep(ms) {
 }
 
 function poll() {
-  pikudHaoref.getActiveAlerts((err, alert) => {
+  pikudHaoref.getActiveRocketAlertZones((err, alertZones) => {
     if (err) {
       console.error(`[ERROR] Failed to fetch alerts: ${err.message || err}`);
       return;
     }
 
-    // The API returns a single alert object (or null/empty) not an array.
-    // Normalise: wrap in array if it's a plain object with a cities property.
-    const alerts = Array.isArray(alert)
-      ? alert
-      : alert && alert.cities
-      ? [alert]
-      : [];
+    if (!Array.isArray(alertZones) || alertZones.length === 0) return;
 
-    for (const a of alerts) {
-      if (!a.cities || !Array.isArray(a.cities)) continue;
+    for (const zone of alertZones) {
+      if (!TARGET_CITIES.has(zone)) continue;
+      if (isDuplicate(zone)) continue;
 
-      const key = alertKey(a);
+      markSent(zone);
 
-      for (const city of a.cities) {
-        if (!TARGET_CITIES.has(city)) continue;
-
-        // Deduplicate per alert event (not per city within the same event)
-        if (isDuplicate(key)) break;
-
-        markSent(key);
-
-        // Fire-and-forget; errors are logged inside sendNotification
-        sendNotification(city).catch((e) =>
-          console.error(`[ERROR] Unexpected error in sendNotification: ${e.message}`)
-        );
-
-        // One notification per unique alert event — break inner city loop
-        break;
-      }
+      sendNotification(zone).catch((e) =>
+        console.error(`[ERROR] Unexpected error in sendNotification: ${e.message}`)
+      );
     }
   });
 }
