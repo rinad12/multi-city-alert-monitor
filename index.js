@@ -218,8 +218,19 @@ function poll() {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
+const citiesRu = [...TARGET_CITIES].map((c) => toRussian(c)).join(', ');
+
 console.log('[INFO] Starting custom-israel-alerts-notifier…');
 console.log(`[INFO] Monitoring cities: ${[...TARGET_CITIES].join(', ')}`);
+
+bot.telegram
+  .sendMessage(
+    CHANNEL_ID,
+    `✅ *Бот запущен и работает*\n\nОтслеживаемые города: ${citiesRu}`,
+    { parse_mode: 'Markdown' }
+  )
+  .then(() => console.log('[INFO] Startup notification sent.'))
+  .catch((err) => console.error(`[ERROR] Failed to send startup notification: ${err.message}`));
 
 setInterval(poll, POLL_INTERVAL_MS);
 
