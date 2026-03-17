@@ -268,6 +268,20 @@ async function sendNotification(message, label) {
 
 const POLL_INTERVAL_MS = 1000;
 
+// Rate-limit identical error messages to once per 60 seconds so the console
+// doesn't flood when the API repeatedly returns malformed history JSON.
+const ERROR_LOG_INTERVAL_MS = 60 * 1000;
+let lastErrorMessage = null;
+let lastErrorTimestamp = 0;
+
+function logError(message) {
+  const now = Date.now();
+  if (message === lastErrorMessage && now - lastErrorTimestamp < ERROR_LOG_INTERVAL_MS) return;
+  lastErrorMessage = message;
+  lastErrorTimestamp = now;
+  console.error(message);
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -275,7 +289,7 @@ function sleep(ms) {
 function poll() {
   pikudHaoref.getActiveAlerts((err, alerts) => {
     if (err) {
-      console.error(`[ERROR] Failed to fetch alerts: ${err.message || err}`);
+      logError(`[ERROR] Failed to fetch alerts: ${err.message || err}`);
       return;
     }
 
