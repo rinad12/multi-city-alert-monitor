@@ -267,31 +267,47 @@ async function sendNotification(message, label) {
 // Empty array = no active alerts.
 
 const POLL_INTERVAL_MS = 1000;
+const BACKOFF_INTERVAL_MS = 5000;
+const BACKOFF_THRESHOLD = 3;
 
-// Rate-limit identical error messages to once per 60 seconds so the console
-// doesn't flood when the API repeatedly returns malformed history JSON.
-const ERROR_LOG_INTERVAL_MS = 60 * 1000;
-let lastErrorMessage = null;
-let lastErrorTimestamp = 0;
-
-function logError(message) {
-  const now = Date.now();
-  if (message === lastErrorMessage && now - lastErrorTimestamp < ERROR_LOG_INTERVAL_MS) return;
-  lastErrorMessage = message;
-  lastErrorTimestamp = now;
-  console.error(message);
-}
+let consecutiveErrors = 0;
+let nextPollAt = 0; // epoch ms — allows skipping a cycle during backoff
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function poll() {
+  // Honour backoff: skip this tick if we're still in the wait window
+  if (Date.now() < nextPollAt) return;
+
   pikudHaoref.getActiveAlerts((err, alerts) => {
     if (err) {
-      logError(`[ERROR] Failed to fetch alerts: ${err.message || err}`);
+      const msg = err.message || String(err);
+      const isMalformedJson = msg.includes('JSON') || msg.includes('SyntaxError');
+
+      if (isMalformedJson) {
+        // Truncated / malformed response from HFC servers — skip silently
+        consecutiveErrors++;
+        if (consecutiveErrors >= BACKOFF_THRESHOLD) {
+          console.warn(`[WARN] HFC API returned malformed JSON ${consecutiveErrors} times in a row — backing off for 5s`);
+          nextPollAt = Date.now() + BACKOFF_INTERVAL_MS;
+        }
+        return;
+      }
+
+      // Genuine network or server error — always log
+      consecutiveErrors++;
+      console.error(`[ERROR] Failed to fetch alerts: ${msg}`);
+      if (consecutiveErrors >= BACKOFF_THRESHOLD) {
+        console.warn(`[WARN] ${consecutiveErrors} consecutive errors — backing off for 5s`);
+        nextPollAt = Date.now() + BACKOFF_INTERVAL_MS;
+      }
       return;
     }
+
+    // Successful response — reset error counter
+    consecutiveErrors = 0;
 
     if (!Array.isArray(alerts) || alerts.length === 0) return;
 
