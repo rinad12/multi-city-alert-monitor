@@ -235,11 +235,16 @@ bot.telegram
 setInterval(poll, POLL_INTERVAL_MS);
 
 // Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\n[INFO] Shutting down gracefully.');
+async function shutdown(signal) {
+  console.log(`\n[INFO] ${signal} received, shutting down.`);
+  try {
+    await bot.telegram.sendMessage(CHANNEL_ID, '🔴 *Бот остановлен*', { parse_mode: 'Markdown' });
+    console.log('[INFO] Shutdown notification sent.');
+  } catch (err) {
+    console.error(`[ERROR] Failed to send shutdown notification: ${err.message}`);
+  }
   process.exit(0);
-});
-process.on('SIGTERM', () => {
-  console.log('[INFO] SIGTERM received, shutting down.');
-  process.exit(0);
-});
+}
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
