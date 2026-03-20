@@ -347,6 +347,26 @@ function poll() {
   });
 }
 
+// ── Bot commands ──────────────────────────────────────────────────────────────
+
+bot.command('status', (ctx) => {
+  pikudHaoref.getActiveAlerts((err, alerts) => {
+    if (err) {
+      return ctx.reply(`⚠️ Не удалось получить данные от Пикуд ха-Орэф: ${err.message}`);
+    }
+
+    if (!Array.isArray(alerts) || alerts.length === 0) {
+      return ctx.reply('✅ Всё спокойно — активных тревог нет.');
+    }
+
+    const lines = alerts.flatMap((alert) =>
+      (alert.cities || []).map((city) => `• ${toRussian(city)} (${alert.type})`)
+    );
+
+    ctx.reply(`🚨 *Активные тревоги:*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+  });
+});
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 const citiesRu = [...TARGET_CITIES].map((c) => toRussian(c)).join(', ');
@@ -363,6 +383,7 @@ bot.telegram
   .then(() => console.log('[INFO] Startup notification sent.'))
   .catch((err) => console.error(`[ERROR] Failed to send startup notification: ${err.message}`));
 
+bot.launch();
 setInterval(poll, POLL_INTERVAL_MS);
 
 // ── Graceful shutdown ─────────────────────────────────────────────────────────
