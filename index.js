@@ -9,6 +9,8 @@ console.log = (...args) => {
   _origLog(...args);
 };
 
+const fs = require('fs');
+const path = require('path');
 const pikudHaoref = require('pikud-haoref-api');
 const { Telegraf } = require('telegraf');
 
@@ -16,21 +18,43 @@ const { Telegraf } = require('telegraf');
 
 const { BOT_TOKEN, CHANNEL_ID, TARGET_CITIES_HEBREW } = process.env;
 
-if (!BOT_TOKEN || !CHANNEL_ID || !TARGET_CITIES_HEBREW) {
-  console.error(
-    '[FATAL] Missing required environment variables: BOT_TOKEN, CHANNEL_ID, TARGET_CITIES_HEBREW'
-  );
+if (!BOT_TOKEN || !CHANNEL_ID) {
+  console.error('[FATAL] Missing required environment variables: BOT_TOKEN, CHANNEL_ID');
   process.exit(1);
 }
 
-const TARGET_CITIES = new Set(
-  TARGET_CITIES_HEBREW.split(',').map((c) => c.trim()).filter(Boolean)
-);
+// ── Persistent city list ──────────────────────────────────────────────────────
+//
+// cities.json stores the active city list so changes via /addcity / /removecity
+// survive bot restarts. On first run it is seeded from TARGET_CITIES_HEBREW.
 
-if (TARGET_CITIES.size === 0) {
-  console.error('[FATAL] TARGET_CITIES_HEBREW must contain at least one city name.');
-  process.exit(1);
+const CITIES_FILE = path.join(__dirname, 'cities.json');
+
+function loadCities() {
+  if (fs.existsSync(CITIES_FILE)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(CITIES_FILE, 'utf8'));
+      if (Array.isArray(data) && data.length > 0) return new Set(data);
+    } catch {
+      console.warn('[WARN] Failed to parse cities.json — falling back to .env');
+    }
+  }
+  // Seed from .env on first run
+  const fromEnv = (TARGET_CITIES_HEBREW || '')
+    .split(',').map((c) => c.trim()).filter(Boolean);
+  if (fromEnv.length === 0) {
+    console.error('[FATAL] No cities configured. Set TARGET_CITIES_HEBREW in .env or use /addcity.');
+    process.exit(1);
+  }
+  return new Set(fromEnv);
 }
+
+function saveCities() {
+  fs.writeFileSync(CITIES_FILE, JSON.stringify([...TARGET_CITIES], null, 2), 'utf8');
+}
+
+const TARGET_CITIES = loadCities();
+saveCities(); // ensure file always exists after startup
 
 // ── Telegram bot ──────────────────────────────────────────────────────────────
 
@@ -349,42 +373,93 @@ function poll() {
 
 // ── Bot commands ──────────────────────────────────────────────────────────────
 
+function citiesList() {
+  return [...TARGET_CITIES].map((c) => `• ${toRussian(c)}`).join('\n');
+}
+
+// /cities — show current list
+bot.command('cities', (ctx) => {
+  ctx.reply(`📍 *Отслеживаемые города:*\n\n${citiesList()}`, { parse_mode: 'Markdown' });
+});
+
+// /addcity בת ים,תל אביב — add cities without removing existing
+bot.command('addcity', (ctx) => {
+  const args = ctx.message.text.replace('/addcity', '').trim();
+  if (!args) return ctx.reply('ℹ️ Использование: /addcity בת ים,תל אביב');
+
+  const incoming = args.split(',').map((c) => c.trim()).filter(Boolean);
+  const added = incoming.filter((c) => !TARGET_CITIES.has(c));
+
+  if (added.length === 0) {
+    return ctx.reply('ℹ️ Все указанные города уже отслеживаются.');
+  }
+
+  for (const city of added) TARGET_CITIES.add(city);
+  saveCities();
+
+  console.log(`[INFO] Cities added: ${added.join(', ')}`);
+  ctx.reply(
+    `➕ *Добавлены:*\n${added.map((c) => `• ${toRussian(c)}`).join('\n')}\n\n📍 *Сейчас отслеживаются:*\n${citiesList()}`,
+    { parse_mode: 'Markdown' }
+  );
+});
+
+// /removecity בת ים,תל אביב — remove specific cities
+bot.command('removecity', (ctx) => {
+  const args = ctx.message.text.replace('/removecity', '').trim();
+  if (!args) return ctx.reply('ℹ️ Использование: /removecity בת ים,תל אביב');
+
+  const incoming = args.split(',').map((c) => c.trim()).filter(Boolean);
+  const removed = incoming.filter((c) => TARGET_CITIES.has(c));
+  const notFound = incoming.filter((c) => !TARGET_CITIES.has(c));
+
+  if (removed.length === 0) {
+    return ctx.reply('ℹ️ Ни один из указанных городов не найден в списке.');
+  }
+
+  for (const city of removed) TARGET_CITIES.delete(city);
+
+  if (TARGET_CITIES.size === 0) {
+    // Restore removed cities to avoid empty list
+    for (const city of removed) TARGET_CITIES.add(city);
+    return ctx.reply('⚠️ Нельзя удалить все города — список должен содержать хотя бы один.');
+  }
+
+  saveCities();
+  console.log(`[INFO] Cities removed: ${removed.join(', ')}`);
+
+  const parts = [
+    `➖ *Больше не отслеживаются:*\n${removed.map((c) => `• ${toRussian(c)}`).join('\n')}`,
+  ];
+  if (notFound.length) parts.push(`❓ *Не найдены в списке:*\n${notFound.map((c) => `• ${c}`).join('\n')}`);
+  parts.push(`📍 *Сейчас отслеживаются:*\n${citiesList()}`);
+
+  ctx.reply(parts.join('\n\n'), { parse_mode: 'Markdown' });
+});
+
+// /setcities בת ים,תל אביב — replace entire list
 bot.command('setcities', (ctx) => {
   const args = ctx.message.text.replace('/setcities', '').trim();
+  if (!args) return ctx.reply('ℹ️ Использование: /setcities בת ים,תל אביב');
 
-  if (!args) {
-    const current = [...TARGET_CITIES].map((c) => `• ${toRussian(c)} (${c})`).join('\n');
-    return ctx.reply(
-      `ℹ️ *Текущие отслеживаемые города:*\n\n${current}\n\n` +
-      `Чтобы изменить, отправьте:\n/setcities בת ים,תל אביב`,
-      { parse_mode: 'Markdown' }
-    );
-  }
+  const newCities = args.split(',').map((c) => c.trim()).filter(Boolean);
+  if (newCities.length === 0) return ctx.reply('⚠️ Список городов не может быть пустым.');
 
-  const newCities = new Set(args.split(',').map((c) => c.trim()).filter(Boolean));
-
-  if (newCities.size === 0) {
-    return ctx.reply('⚠️ Список городов не может быть пустым.');
-  }
-
-  const added   = [...newCities].filter((c) => !TARGET_CITIES.has(c));
-  const removed = [...TARGET_CITIES].filter((c) => !newCities.has(c));
+  const added   = newCities.filter((c) => !TARGET_CITIES.has(c));
+  const removed = [...TARGET_CITIES].filter((c) => !newCities.includes(c));
 
   TARGET_CITIES.clear();
   for (const city of newCities) TARGET_CITIES.add(city);
+  saveCities();
+
+  console.log(`[INFO] Cities replaced: ${[...TARGET_CITIES].join(', ')}`);
 
   const parts = [];
   if (added.length)   parts.push(`➕ *Добавлены:*\n${added.map((c) => `• ${toRussian(c)}`).join('\n')}`);
   if (removed.length) parts.push(`➖ *Больше не отслеживаются:*\n${removed.map((c) => `• ${toRussian(c)}`).join('\n')}`);
+  parts.push(`📍 *Сейчас отслеживаются:*\n${citiesList()}`);
 
-  const summary = [...TARGET_CITIES].map((c) => toRussian(c)).join(', ');
-
-  const reply = parts.length
-    ? `${parts.join('\n\n')}\n\n📍 *Сейчас отслеживаются:* ${summary}`
-    : `📍 Список городов не изменился: ${summary}`;
-
-  console.log(`[INFO] Cities updated: ${[...TARGET_CITIES].join(', ')}`);
-  ctx.reply(reply, { parse_mode: 'Markdown' });
+  ctx.reply(parts.join('\n\n'), { parse_mode: 'Markdown' });
 });
 
 bot.command('status', (ctx) => {
