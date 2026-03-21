@@ -349,6 +349,44 @@ function poll() {
 
 // ── Bot commands ──────────────────────────────────────────────────────────────
 
+bot.command('setcities', (ctx) => {
+  const args = ctx.message.text.replace('/setcities', '').trim();
+
+  if (!args) {
+    const current = [...TARGET_CITIES].map((c) => `• ${toRussian(c)} (${c})`).join('\n');
+    return ctx.reply(
+      `ℹ️ *Текущие отслеживаемые города:*\n\n${current}\n\n` +
+      `Чтобы изменить, отправьте:\n/setcities בת ים,תל אביב`,
+      { parse_mode: 'Markdown' }
+    );
+  }
+
+  const newCities = new Set(args.split(',').map((c) => c.trim()).filter(Boolean));
+
+  if (newCities.size === 0) {
+    return ctx.reply('⚠️ Список городов не может быть пустым.');
+  }
+
+  const added   = [...newCities].filter((c) => !TARGET_CITIES.has(c));
+  const removed = [...TARGET_CITIES].filter((c) => !newCities.has(c));
+
+  TARGET_CITIES.clear();
+  for (const city of newCities) TARGET_CITIES.add(city);
+
+  const parts = [];
+  if (added.length)   parts.push(`➕ *Добавлены:*\n${added.map((c) => `• ${toRussian(c)}`).join('\n')}`);
+  if (removed.length) parts.push(`➖ *Больше не отслеживаются:*\n${removed.map((c) => `• ${toRussian(c)}`).join('\n')}`);
+
+  const summary = [...TARGET_CITIES].map((c) => toRussian(c)).join(', ');
+
+  const reply = parts.length
+    ? `${parts.join('\n\n')}\n\n📍 *Сейчас отслеживаются:* ${summary}`
+    : `📍 Список городов не изменился: ${summary}`;
+
+  console.log(`[INFO] Cities updated: ${[...TARGET_CITIES].join(', ')}`);
+  ctx.reply(reply, { parse_mode: 'Markdown' });
+});
+
 bot.command('status', (ctx) => {
   pikudHaoref.getActiveAlerts((err, alerts) => {
     if (err) {
