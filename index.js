@@ -377,6 +377,12 @@ function citiesList() {
   return [...TARGET_CITIES].map((c) => `• ${toRussian(c)}`).join('\n');
 }
 
+function notifyChannel(text) {
+  bot.telegram.sendMessage(CHANNEL_ID, text, { parse_mode: 'Markdown' }).catch((e) =>
+    console.error(`[ERROR] Failed to notify channel: ${e.message}`)
+  );
+}
+
 // /cities — show current list
 bot.command('cities', (ctx) => {
   ctx.reply(`📍 *Отслеживаемые города:*\n\n${citiesList()}`, { parse_mode: 'Markdown' });
@@ -398,10 +404,9 @@ bot.command('addcity', (ctx) => {
   saveCities();
 
   console.log(`[INFO] Cities added: ${added.join(', ')}`);
-  ctx.reply(
-    `➕ *Добавлены:*\n${added.map((c) => `• ${toRussian(c)}`).join('\n')}\n\n📍 *Сейчас отслеживаются:*\n${citiesList()}`,
-    { parse_mode: 'Markdown' }
-  );
+  const addMsg = `➕ *Добавлены:*\n${added.map((c) => `• ${toRussian(c)}`).join('\n')}\n\n📍 *Сейчас отслеживаются:*\n${citiesList()}`;
+  ctx.reply(addMsg, { parse_mode: 'Markdown' });
+  notifyChannel(addMsg);
 });
 
 // /removecity בת ים,תל אביב — remove specific cities
@@ -434,7 +439,9 @@ bot.command('removecity', (ctx) => {
   if (notFound.length) parts.push(`❓ *Не найдены в списке:*\n${notFound.map((c) => `• ${c}`).join('\n')}`);
   parts.push(`📍 *Сейчас отслеживаются:*\n${citiesList()}`);
 
-  ctx.reply(parts.join('\n\n'), { parse_mode: 'Markdown' });
+  const removeMsg = parts.join('\n\n');
+  ctx.reply(removeMsg, { parse_mode: 'Markdown' });
+  notifyChannel(removeMsg);
 });
 
 // /setcities בת ים,תל אביב — replace entire list
@@ -459,7 +466,9 @@ bot.command('setcities', (ctx) => {
   if (removed.length) parts.push(`➖ *Больше не отслеживаются:*\n${removed.map((c) => `• ${toRussian(c)}`).join('\n')}`);
   parts.push(`📍 *Сейчас отслеживаются:*\n${citiesList()}`);
 
-  ctx.reply(parts.join('\n\n'), { parse_mode: 'Markdown' });
+  const setMsg = parts.join('\n\n');
+  ctx.reply(setMsg, { parse_mode: 'Markdown' });
+  notifyChannel(setMsg);
 });
 
 bot.command('status', (ctx) => {
