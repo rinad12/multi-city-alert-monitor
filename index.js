@@ -13,6 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const pikudHaoref = require('pikud-haoref-api');
 const { Telegraf } = require('telegraf');
+const { translate, TARGET_LANG } = require('./translate');
 
 // ── Environment validation ────────────────────────────────────────────────────
 
@@ -24,9 +25,6 @@ if (!BOT_TOKEN || !CHANNEL_ID) {
 }
 
 // ── Persistent city list ──────────────────────────────────────────────────────
-//
-// cities.json stores the active city list so changes via /addcity / /removecity
-// survive bot restarts. On first run it is seeded from TARGET_CITIES_HEBREW.
 
 const CITIES_FILE = path.join(__dirname, 'cities.json');
 
@@ -39,7 +37,6 @@ function loadCities() {
       console.warn('[WARN] Failed to parse cities.json — falling back to .env');
     }
   }
-  // Seed from .env on first run
   const fromEnv = (TARGET_CITIES_HEBREW || '')
     .split(',').map((c) => c.trim()).filter(Boolean);
   if (fromEnv.length === 0) {
@@ -54,109 +51,108 @@ function saveCities() {
 }
 
 const TARGET_CITIES = loadCities();
-saveCities(); // ensure file always exists after startup
+saveCities();
 
 // ── Telegram bot ──────────────────────────────────────────────────────────────
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// ── Hebrew → Russian city name mapping ───────────────────────────────────────
+// ── City name helpers ─────────────────────────────────────────────────────────
 
-const CITY_MAP = {
-  'תל אביב - יפו': 'Тель-Авив — Яффо',
-  'תל אביב': 'Тель-Авив',
-  'ירושלים': 'Иерусалим',
-  'חיפה': 'Хайфа',
-  'באר שבע': 'Беэр-Шева',
-  'נתניה': 'Нетания',
-  'אשדוד': 'Ашдод',
-  'אשקלון': 'Ашкелон',
-  'רחובות': 'Реховот',
-  'בת ים': 'Бат-Ям',
-  'הרצליה': 'Герцлия',
-  'כפר סבא': 'Кфар-Саба',
-  'פתח תקווה': 'Петах-Тиква',
-  'ראשון לציון': 'Ришон-ле-Цион',
-  'נס ציונה': 'Нес-Циона',
-  'לוד': 'Лод',
-  'רמלה': 'Рамла',
-  'עכו': 'Акко',
-  'נהריה': 'Нагария',
-  'עפולה': 'Афула',
-  'טבריה': 'Тверия',
-  'צפת': 'Цфат',
-  'קריית שמונה': 'Кирьят-Шмона',
-  'מודיעין-מכבים-רעות': 'Модиин-Маккабим-Реут',
-  'מודיעין': 'Модиин',
-  'אילת': 'Эйлат',
-  'דימונה': 'Димона',
-  'ערד': 'Арад',
-  'קריית גת': 'Кирьят-Гат',
-  'קריית ביאליק': 'Кирьят-Биалик',
-  'קריית מוצקין': 'Кирьят-Моцкин',
-  'קריית ים': 'Кирьят-Ям',
-  'קריית אתא': 'Кирьят-Ата',
-  'קריית אונו': 'Кирьят-Оно',
-  'גבעתיים': 'Гиватаим',
-  'בני ברק': 'Бней-Брак',
-  'רמת גן': 'Рамат-Ган',
-  'גבעת שמואל': 'Гиват-Шмуэль',
-  'אור יהודה': 'Ор-Иехуда',
-  'יהוד-מונוסון': 'Иегуд-Монасон',
-  'חדרה': 'Хадера',
-  'זכרון יעקב': 'Зихрон-Яаков',
-  'רעננה': 'Раанана',
-  'הוד השרון': 'Ход-ха-Шарон',
-  'רמת השרון': 'Рамат-ха-Шарон',
-  'כפר יונה': 'Кфар-Йона',
-  'טירת כרמל': 'Тират-Кармель',
-  'יקנעם עילית': 'Йокнеам-Иллит',
-  'מגדל העמק': 'Мигдаль-ха-Эмек',
-  'נצרת': 'Назарет',
-  'נוף הגליל': 'Ноф-ха-Галиль',
-  'שדרות': 'Сдерот',
-  'ניר עם': 'Нир-Ам',
-  'כפר עזה': 'Кфар-Аза',
-  'בארי': 'Беэри',
-  'נחל עוז': 'Нахаль-Оз',
-  'גן יבנה': 'Ган-Явне',
-  'יבנה': 'Явне',
-  'גדרה': 'Гедера',
-  'מזכרת בתיה': 'Мазкерет-Батья',
-  'קרית מלאכי': 'Кирьят-Малахи',
-  'ספיר': 'Сапир',
-  'מעלה אדומים': 'Маале-Адумим',
-  'בית שמש': 'Бейт-Шемеш',
-  'ביתר עילית': 'Битар-Иллит',
-  'אלעד': 'Эльад',
-  'כפר קאסם': 'Кфар-Касем',
-  'טייבה': 'Тайбе',
-  'טירה': 'Тира',
-  'קלנסווה': 'Кальансауа',
-  'רהט': 'Рахат',
-  'ירוחם': 'Йерухам',
-  'מצפה רמון': 'Мицпе-Рамон',
-  'שלומי': 'Шломи',
-  'מטולה': 'Метула',
-  'כיסופים': 'Кисуфим',
-  'ניר עוז': 'Нир-Оз',
-  'רעים': 'Реим',
-  'נתיב העשרה': 'Натив-ха-Асара',
-  'זיקים': 'Зиким',
-  'אשכול': 'Эшколь',
-  'חוף אשקלון': 'Побережье Ашкелона',
-};
-
-function toRussian(hebrewCity) {
-  return CITY_MAP[hebrewCity] || hebrewCity;
+// City names from the API are always Hebrew. Translate he → TARGET_LANG for display.
+function translateCity(hebrewCity) {
+  return translate(hebrewCity, 'he');
 }
 
-// ── Alert type → Russian message ──────────────────────────────────────────────
+// Hebrew Unicode block detection
+function isHebrew(text) {
+  return /[\u0590-\u05FF\uFB1D-\uFB4F]/.test(text);
+}
 
-// Alert types ending in "Drill" are silently skipped.
+// Accept city input in any language; resolve to the Hebrew form used by the API.
+function resolveToHebrew(input) {
+  if (isHebrew(input) || TARGET_LANG === 'he') return Promise.resolve(input);
+  return translate(input, TARGET_LANG, 'he');
+}
+
+// ── Pre-translated strings ────────────────────────────────────────────────────
+//
+// All static bot strings are translated once at startup.
+// Alert templates use %CITY% as a placeholder for the runtime city name.
+
+const T = {};
+
+async function initTranslations() {
+  console.log(`[INFO] Translating bot strings to "${TARGET_LANG}"…`);
+
+  const strings = [
+    // Alert message templates — %CITY% replaced at runtime
+    /* 0  missiles             */ '🚀 *MISSILE ALERT: %CITY%* 🚨\n\nPlease don\'t worry — the siren has gone off and I am already in a safe place. I won\'t be able to answer calls until the incident is over. Everything is under control — I\'ll write as soon as I\'m out!',
+    /* 1  hostileAircraft      */ '✈️ *AIR THREAT: %CITY%* 🚨\n\nA suspicious object has been detected in the sky. I am already in a protected space — it\'s safe here. I won\'t be able to answer calls until the incident is over. Just following safety protocol and waiting for the all-clear.',
+    /* 2  earthQuake           */ '🫨 *EARTHQUAKE: %CITY%* 🚨\n\nGround tremors have been detected. I have moved to open ground as instructed. I\'m fine — don\'t worry!',
+    /* 3  terroristInfiltration*/ '🪖 *SECURITY ALERT: %CITY%* 🚨\n\nSuspected infiltration in the area. I\'m at home with the doors locked — everything is fine. I am in a protected room and following instructions.',
+    /* 4  tsunami              */ '🌊 *TSUNAMI WARNING: %CITY%* 🚨\n\nA tsunami warning has been issued. I have moved to a safe distance from the coastline. Everything is under control.',
+    /* 5  hazmat               */ '⚠️ *HAZMAT ALERT: %CITY%* 🚨\n\nA hazardous-materials leak has been reported. I have sealed the windows and am staying indoors. I\'m fine — just a precaution.',
+    /* 6  allClear             */ '✅ *ALL CLEAR: %CITY%* ✅\n\nThe Home Front Command has confirmed the end of the incident. You may leave the shelter. 😊',
+    /* 7  newsFlashShelter     */ '🔔 *NOTICE: %CITY%* 🔔\n\nInstructions have been given to stay near a protected space. I\'m already nearby — everything is fine, just a precaution.',
+    /* 8  defaultAlert         */ '🚨 *ALERT: %CITY%* 🚨\n\nThis message was sent automatically — a siren has gone off in the area. I am following safety instructions and am in a protected space.',
+    // Command responses
+    /* 9  citiesHeader         */ '📍 *Monitored cities:*',
+    /* 10 addcityUsage         */ 'ℹ️ Usage: /addcity בת ים,תל אביב',
+    /* 11 addcityAlready       */ 'ℹ️ All specified cities are already being monitored.',
+    /* 12 removecityUsage      */ 'ℹ️ Usage: /removecity בת ים,תל אביב',
+    /* 13 removecityNotFound   */ 'ℹ️ None of the specified cities were found in the list.',
+    /* 14 removecityCannotEmpty*/ '⚠️ Cannot remove all cities — the list must contain at least one.',
+    /* 15 setcitiesUsage       */ 'ℹ️ Usage: /setcities בת ים,תל אביב',
+    /* 16 setcitiesEmpty       */ '⚠️ The city list cannot be empty.',
+    /* 17 statusAllClear       */ '✅ All clear — no active alerts.',
+    /* 18 statusActiveHeader   */ '🚨 *Active alerts:*',
+    // Section labels
+    /* 19 labelAdded           */ '➕ *Added:*',
+    /* 20 labelRemoved         */ '➖ *No longer monitoring:*',
+    /* 21 labelNotFound        */ '❓ *Not found in list:*',
+    /* 22 labelNowMonitoring   */ '📍 *Now monitoring:*',
+    // Lifecycle
+    /* 23 startupPrefix        */ '✅ *Bot started and running*\n\nMonitoring cities:',
+    /* 24 stopped              */ '🔴 *Bot stopped*',
+  ];
+
+  const translated = await Promise.all(strings.map((s) => translate(s)));
+
+  [
+    T.missiles,
+    T.hostileAircraft,
+    T.earthquake,
+    T.terroristInfiltration,
+    T.tsunami,
+    T.hazmat,
+    T.allClear,
+    T.newsFlashShelter,
+    T.defaultAlert,
+    T.citiesHeader,
+    T.addcityUsage,
+    T.addcityAlready,
+    T.removecityUsage,
+    T.removecityNotFound,
+    T.removecityCannotEmpty,
+    T.setcitiesUsage,
+    T.setcitiesEmpty,
+    T.statusAllClear,
+    T.statusActiveHeader,
+    T.labelAdded,
+    T.labelRemoved,
+    T.labelNotFound,
+    T.labelNowMonitoring,
+    T.startupPrefix,
+    T.stopped,
+  ] = translated;
+
+  console.log('[INFO] Bot strings ready.');
+}
+
+// ── Alert messages ────────────────────────────────────────────────────────────
+
 const DRILL_SUFFIX = 'Drill';
-
-// Keywords in `alert.instructions` that signal newsFlash phase.
 const INSTRUCTIONS_ALL_CLEAR = ['ניתן לצאת', 'הסתיים'];
 
 function containsAny(text, keywords) {
@@ -164,94 +160,35 @@ function containsAny(text, keywords) {
   return keywords.some((kw) => text.includes(kw));
 }
 
-/**
- * Builds a Russian Telegram message based on alert type and instructions.
- * Returns null for drill alerts (caller should skip).
- */
-function buildMessage(cityHebrew, alert) {
-  const cityRu = toRussian(cityHebrew);
+// `cityName` is already translated to TARGET_LANG.
+// Alert body templates are pre-translated; only %CITY% is substituted at runtime.
+function buildMessage(cityName, alert) {
   const type = alert.type || 'unknown';
   const instructions = alert.instructions || '';
 
-  // Skip drills silently
   if (type.endsWith(DRILL_SUFFIX)) return null;
 
+  const city = (t) => t.replace('%CITY%', cityName);
+
   switch (type) {
-    case 'missiles':
-      return (
-        `🚀 *РАКЕТНЫЙ ОБСТРЕЛ: ${cityRu}* 🚨\n\n` +
-        `Пожалуйста, не волнуйтесь: сработала сирена, и я уже в безопасном месте. ` +
-        `Здесь я не смогу отвечать на звонки до окончания инцидента. ` +
-        `Всё под контролем, напишу сразу, как выйду!`
-      );
-
-    case 'hostileAircraftIntrusion':
-      return (
-        `✈️ *ВОЗДУШНАЯ УГРОЗА: ${cityRu}* 🚨\n\n` +
-        `В небе замечен подозрительный объект. Я уже в защищённом пространстве, здесь безопасно. ` +
-        `Здесь я не смогу отвечать на звонки до окончания инцидента. ` +
-        `Просто следую протоколу безопасности и жду отбоя.`
-      );
-
-    case 'earthQuake':
-      return (
-        `🫨 *ЗЕМЛЕТРЯСЕНИЕ: ${cityRu}* 🚨\n\n` +
-        `Зафиксированы подземные толчки. Я вышел на открытое пространство, как того требует инструкция. ` +
-        `Со мной всё хорошо, не переживайте!`
-      );
-
-    case 'terroristInfiltration':
-      return (
-        `🪖 *БЕЗОПАСНОСТЬ: ${cityRu}* 🚨\n\n` +
-        `Подозрение на проникновение в район. Я дома, двери заперты, всё в порядке. ` +
-        `Нахожусь в защищённой комнате и следую указаниям.`
-      );
-
-    case 'tsunami':
-      return (
-        `🌊 *УГРОЗА ЦУНАМИ: ${cityRu}* 🚨\n\n` +
-        `Поступило предупреждение о цунами. Я отошёл от береговой линии на безопасное расстояние. ` +
-        `Всё под контролем.`
-      );
-
+    case 'missiles':              return city(T.missiles);
+    case 'hostileAircraftIntrusion': return city(T.hostileAircraft);
+    case 'earthQuake':            return city(T.earthquake);
+    case 'terroristInfiltration': return city(T.terroristInfiltration);
+    case 'tsunami':               return city(T.tsunami);
     case 'hazardousMaterials':
-    case 'radiologicalEvent':
-      return (
-        `⚠️ *ТЕХНОГЕННАЯ ОПАСНОСТЬ: ${cityRu}* 🚨\n\n` +
-        `Сообщается об утечке опасных веществ. Я плотно закрыл окна и нахожусь в помещении. ` +
-        `Со мной всё в порядке, просто меры предосторожности.`
-      );
-
+    case 'radiologicalEvent':     return city(T.hazmat);
     case 'newsFlash':
-      if (containsAny(instructions, INSTRUCTIONS_ALL_CLEAR)) {
-        return (
-          `✅ *ОТБОЙ / МОЖНО ВЫХОДИТЬ: ${cityRu}* ✅\n\n` +
-          `Служба тыла подтвердила окончание инцидента. Можно выходить из убежища. 😊`
-        );
-      }
-      // Default newsFlash (shelter / take cover)
-      return (
-        `🔔 *УВЕДОМЛЕНИЕ: ${cityRu}* 🔔\n\n` +
-        `Поступило указание быть рядом с защищённым пространством. ` +
-        `Я уже рядом, всё в порядке, просто меры предосторожности.`
-      );
-
-    default:
-      return (
-        `🚨 *ТРЕВОГА: ${cityRu}* 🚨\n\n` +
-        `Это сообщение отправлено автоматически — в районе сработала сирена. ` +
-        `Я следую инструкциям безопасности и нахожусь в защищённом пространстве.`
-      );
+      return containsAny(instructions, INSTRUCTIONS_ALL_CLEAR)
+        ? city(T.allClear)
+        : city(T.newsFlashShelter);
+    default:                      return city(T.defaultAlert);
   }
 }
 
 // ── Deduplication ─────────────────────────────────────────────────────────────
-//
-// Key: `${type}_${instructions}_${zone}` — ensures each distinct phase of an
-// incident (e.g., alert → all-clear) sends its own notification.
-// Entries are pruned after DEDUP_TTL_MS.
 
-const DEDUP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const DEDUP_TTL_MS = 10 * 60 * 1000;
 const sentAlerts = new Map();
 
 function dedupKey(alert, zone) {
@@ -276,7 +213,6 @@ function markSent(key) {
 
 async function sendNotification(message, label) {
   const MAX_RETRIES = 3;
-
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       await bot.telegram.sendMessage(CHANNEL_ID, message, { parse_mode: 'Markdown' });
@@ -284,97 +220,83 @@ async function sendNotification(message, label) {
       return;
     } catch (err) {
       const isLast = attempt === MAX_RETRIES;
-      console.error(
-        `[ERROR] Failed to send Telegram message (attempt ${attempt}/${MAX_RETRIES}): ${err.message}`
-      );
+      console.error(`[ERROR] Failed to send Telegram message (attempt ${attempt}/${MAX_RETRIES}): ${err.message}`);
       if (!isLast) await sleep(attempt * 1000);
     }
   }
 }
 
 // ── Polling ───────────────────────────────────────────────────────────────────
-//
-// getActiveAlerts(callback) → callback(err, alerts[])
-// Each alert: { type, cities, instructions, id }
-// Empty array = no active alerts.
 
 const POLL_INTERVAL_MS = 2000;
 const BACKOFF_INTERVAL_MS = 5000;
 const BACKOFF_THRESHOLD = 3;
 
 let consecutiveErrors = 0;
-let nextPollAt = 0; // epoch ms — allows skipping a cycle during backoff
+let nextPollAt = 0;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function poll() {
-  // Honour backoff: skip this tick if we're still in the wait window
   if (Date.now() < nextPollAt) return;
 
   pikudHaoref.getActiveAlerts((err, alerts) => {
     if (err) {
       const msg = err.message || String(err);
       const isMalformedJson = msg.includes('JSON') || msg.includes('SyntaxError');
-
+      consecutiveErrors++;
       if (isMalformedJson) {
-        // Truncated / malformed response from HFC servers — skip silently
-        consecutiveErrors++;
         if (consecutiveErrors >= BACKOFF_THRESHOLD) {
           console.warn(`[WARN] HFC API returned malformed JSON ${consecutiveErrors} times in a row — backing off for 5s`);
           nextPollAt = Date.now() + BACKOFF_INTERVAL_MS;
         }
-        return;
-      }
-
-      // Genuine network or server error — always log
-      consecutiveErrors++;
-      console.error(`[ERROR] Failed to fetch alerts: ${msg}`);
-      if (consecutiveErrors >= BACKOFF_THRESHOLD) {
-        console.warn(`[WARN] ${consecutiveErrors} consecutive errors — backing off for 5s`);
-        nextPollAt = Date.now() + BACKOFF_INTERVAL_MS;
+      } else {
+        console.error(`[ERROR] Failed to fetch alerts: ${msg}`);
+        if (consecutiveErrors >= BACKOFF_THRESHOLD) {
+          console.warn(`[WARN] ${consecutiveErrors} consecutive errors — backing off for 5s`);
+          nextPollAt = Date.now() + BACKOFF_INTERVAL_MS;
+        }
       }
       return;
     }
 
-    // Successful response — reset error counter
     consecutiveErrors = 0;
-
     if (!Array.isArray(alerts) || alerts.length === 0) return;
 
-    for (const alert of alerts) {
-      if (!Array.isArray(alert.cities)) continue;
+    (async () => {
+      for (const alert of alerts) {
+        if (!Array.isArray(alert.cities)) continue;
+        for (const city of alert.cities) {
+          if (!TARGET_CITIES.has(city)) continue;
 
-      for (const city of alert.cities) {
-        if (!TARGET_CITIES.has(city)) continue;
+          console.log('[DEBUG] Full Alert Object:', JSON.stringify(alert, null, 2));
 
-        // Only log when this alert concerns one of our target cities
-        console.log('[DEBUG] Full Alert Object:', JSON.stringify(alert, null, 2));
+          if ((alert.type || '').endsWith(DRILL_SUFFIX)) continue;
 
-        // Skip drills silently
-        if ((alert.type || '').endsWith(DRILL_SUFFIX)) continue;
+          const key = dedupKey(alert, city);
+          if (isDuplicate(key)) continue;
 
-        const key = dedupKey(alert, city);
-        if (isDuplicate(key)) continue;
+          const cityName = await translateCity(city);
+          const message = buildMessage(cityName, alert);
+          if (!message) continue;
 
-        const message = buildMessage(city, alert);
-        if (!message) continue;
-
-        markSent(key);
-
-        sendNotification(message, `${alert.type} / ${city}`).catch((e) =>
-          console.error(`[ERROR] Unexpected error in sendNotification: ${e.message}`)
-        );
+          markSent(key);
+          sendNotification(message, `${alert.type} / ${city}`).catch((e) =>
+            console.error(`[ERROR] Unexpected error in sendNotification: ${e.message}`)
+          );
+        }
       }
-    }
+    })();
   });
 }
 
 // ── Bot commands ──────────────────────────────────────────────────────────────
 
-function citiesList() {
-  return [...TARGET_CITIES].map((c) => `• ${toRussian(c)}`).join('\n');
+async function citiesList() {
+  const names = await Promise.all([...TARGET_CITIES].map((c) => translateCity(c)));
+  return names.map((n) => `• ${n}`).join('\n');
 }
 
 function notifyChannel(text) {
@@ -383,74 +305,70 @@ function notifyChannel(text) {
   );
 }
 
-// /cities — show current list
-bot.command('cities', (ctx) => {
-  ctx.reply(`📍 *Отслеживаемые города:*\n\n${citiesList()}`, { parse_mode: 'Markdown' });
+bot.command('cities', async (ctx) => {
+  const list = await citiesList();
+  ctx.reply(`${T.citiesHeader}\n\n${list}`, { parse_mode: 'Markdown' });
 });
 
-// /addcity בת ים,תל אביב — add cities without removing existing
-bot.command('addcity', (ctx) => {
+bot.command('addcity', async (ctx) => {
   const args = ctx.message.text.replace('/addcity', '').trim();
-  if (!args) return ctx.reply('ℹ️ Использование: /addcity בת ים,תל אביב');
+  if (!args) return ctx.reply(T.addcityUsage);
 
-  const incoming = args.split(',').map((c) => c.trim()).filter(Boolean);
+  const incoming = await Promise.all(args.split(',').map((c) => resolveToHebrew(c.trim())));
   const added = incoming.filter((c) => !TARGET_CITIES.has(c));
 
-  if (added.length === 0) {
-    return ctx.reply('ℹ️ Все указанные города уже отслеживаются.');
-  }
+  if (added.length === 0) return ctx.reply(T.addcityAlready);
 
   for (const city of added) TARGET_CITIES.add(city);
   saveCities();
-
   console.log(`[INFO] Cities added: ${added.join(', ')}`);
-  const addMsg = `➕ *Добавлены:*\n${added.map((c) => `• ${toRussian(c)}`).join('\n')}\n\n📍 *Сейчас отслеживаются:*\n${citiesList()}`;
-  ctx.reply(addMsg, { parse_mode: 'Markdown' });
-  notifyChannel(addMsg);
+
+  const addedNames = await Promise.all(added.map((c) => translateCity(c)));
+  const list = await citiesList();
+  const msg = `${T.labelAdded}\n${addedNames.map((n) => `• ${n}`).join('\n')}\n\n${T.labelNowMonitoring}\n${list}`;
+  ctx.reply(msg, { parse_mode: 'Markdown' });
+  notifyChannel(msg);
 });
 
-// /removecity בת ים,תל אביב — remove specific cities
-bot.command('removecity', (ctx) => {
+bot.command('removecity', async (ctx) => {
   const args = ctx.message.text.replace('/removecity', '').trim();
-  if (!args) return ctx.reply('ℹ️ Использование: /removecity בת ים,תל אביב');
+  if (!args) return ctx.reply(T.removecityUsage);
 
-  const incoming = args.split(',').map((c) => c.trim()).filter(Boolean);
+  const incoming = await Promise.all(args.split(',').map((c) => resolveToHebrew(c.trim())));
   const removed = incoming.filter((c) => TARGET_CITIES.has(c));
   const notFound = incoming.filter((c) => !TARGET_CITIES.has(c));
 
-  if (removed.length === 0) {
-    return ctx.reply('ℹ️ Ни один из указанных городов не найден в списке.');
-  }
+  if (removed.length === 0) return ctx.reply(T.removecityNotFound);
 
   for (const city of removed) TARGET_CITIES.delete(city);
 
   if (TARGET_CITIES.size === 0) {
-    // Restore removed cities to avoid empty list
     for (const city of removed) TARGET_CITIES.add(city);
-    return ctx.reply('⚠️ Нельзя удалить все города — список должен содержать хотя бы один.');
+    return ctx.reply(T.removecityCannotEmpty);
   }
 
   saveCities();
   console.log(`[INFO] Cities removed: ${removed.join(', ')}`);
 
-  const parts = [
-    `➖ *Больше не отслеживаются:*\n${removed.map((c) => `• ${toRussian(c)}`).join('\n')}`,
-  ];
-  if (notFound.length) parts.push(`❓ *Не найдены в списке:*\n${notFound.map((c) => `• ${c}`).join('\n')}`);
-  parts.push(`📍 *Сейчас отслеживаются:*\n${citiesList()}`);
+  const removedNames = await Promise.all(removed.map((c) => translateCity(c)));
+  const notFoundNames = await Promise.all(notFound.map((c) => translateCity(c)));
+  const list = await citiesList();
 
-  const removeMsg = parts.join('\n\n');
-  ctx.reply(removeMsg, { parse_mode: 'Markdown' });
-  notifyChannel(removeMsg);
+  const parts = [`${T.labelRemoved}\n${removedNames.map((n) => `• ${n}`).join('\n')}`];
+  if (notFoundNames.length) parts.push(`${T.labelNotFound}\n${notFoundNames.map((n) => `• ${n}`).join('\n')}`);
+  parts.push(`${T.labelNowMonitoring}\n${list}`);
+
+  const msg = parts.join('\n\n');
+  ctx.reply(msg, { parse_mode: 'Markdown' });
+  notifyChannel(msg);
 });
 
-// /setcities בת ים,תל אביב — replace entire list
-bot.command('setcities', (ctx) => {
+bot.command('setcities', async (ctx) => {
   const args = ctx.message.text.replace('/setcities', '').trim();
-  if (!args) return ctx.reply('ℹ️ Использование: /setcities בת ים,תל אביב');
+  if (!args) return ctx.reply(T.setcitiesUsage);
 
-  const newCities = args.split(',').map((c) => c.trim()).filter(Boolean);
-  if (newCities.length === 0) return ctx.reply('⚠️ Список городов не может быть пустым.');
+  const newCities = await Promise.all(args.split(',').map((c) => resolveToHebrew(c.trim())));
+  if (newCities.length === 0) return ctx.reply(T.setcitiesEmpty);
 
   const added   = newCities.filter((c) => !TARGET_CITIES.has(c));
   const removed = [...TARGET_CITIES].filter((c) => !newCities.includes(c));
@@ -458,52 +376,56 @@ bot.command('setcities', (ctx) => {
   TARGET_CITIES.clear();
   for (const city of newCities) TARGET_CITIES.add(city);
   saveCities();
-
   console.log(`[INFO] Cities replaced: ${[...TARGET_CITIES].join(', ')}`);
 
-  const parts = [];
-  if (added.length)   parts.push(`➕ *Добавлены:*\n${added.map((c) => `• ${toRussian(c)}`).join('\n')}`);
-  if (removed.length) parts.push(`➖ *Больше не отслеживаются:*\n${removed.map((c) => `• ${toRussian(c)}`).join('\n')}`);
-  parts.push(`📍 *Сейчас отслеживаются:*\n${citiesList()}`);
+  const addedNames   = await Promise.all(added.map((c) => translateCity(c)));
+  const removedNames = await Promise.all(removed.map((c) => translateCity(c)));
+  const list = await citiesList();
 
-  const setMsg = parts.join('\n\n');
-  ctx.reply(setMsg, { parse_mode: 'Markdown' });
-  notifyChannel(setMsg);
+  const parts = [];
+  if (addedNames.length)   parts.push(`${T.labelAdded}\n${addedNames.map((n) => `• ${n}`).join('\n')}`);
+  if (removedNames.length) parts.push(`${T.labelRemoved}\n${removedNames.map((n) => `• ${n}`).join('\n')}`);
+  parts.push(`${T.labelNowMonitoring}\n${list}`);
+
+  const msg = parts.join('\n\n');
+  ctx.reply(msg, { parse_mode: 'Markdown' });
+  notifyChannel(msg);
 });
 
 bot.command('status', (ctx) => {
-  pikudHaoref.getActiveAlerts((err, alerts) => {
+  pikudHaoref.getActiveAlerts(async (err, alerts) => {
     if (err) {
-      return ctx.reply(`⚠️ Не удалось получить данные от Пикуд ха-Орэф: ${err.message}`);
+      // Error message is dynamic — translate on the fly
+      return ctx.reply(await translate(`⚠️ Failed to fetch data from Home Front Command: ${err.message}`));
     }
 
     if (!Array.isArray(alerts) || alerts.length === 0) {
-      return ctx.reply('✅ Всё спокойно — активных тревог нет.');
+      return ctx.reply(T.statusAllClear);
     }
 
-    const lines = alerts.flatMap((alert) =>
-      (alert.cities || []).map((city) => `• ${toRussian(city)} (${alert.type})`)
+    const lines = await Promise.all(
+      alerts.flatMap((alert) =>
+        (alert.cities || []).map(async (city) => `• ${await translateCity(city)} (${alert.type})`)
+      )
     );
-
-    ctx.reply(`🚨 *Активные тревоги:*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+    ctx.reply(`${T.statusActiveHeader}\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
   });
 });
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-const citiesRu = [...TARGET_CITIES].map((c) => toRussian(c)).join(', ');
-
 console.log('[INFO] Starting custom-israel-alerts-notifier…');
 console.log(`[INFO] Monitoring cities: ${[...TARGET_CITIES].join(', ')}`);
 
-bot.telegram
-  .sendMessage(
+initTranslations()
+  .then(() => Promise.all([...TARGET_CITIES].map((c) => translateCity(c))))
+  .then((names) => bot.telegram.sendMessage(
     CHANNEL_ID,
-    `✅ *Бот запущен и работает*\n\nОтслеживаемые города: ${citiesRu}`,
+    `${T.startupPrefix} ${names.join(', ')}`,
     { parse_mode: 'Markdown' }
-  )
+  ))
   .then(() => console.log('[INFO] Startup notification sent.'))
-  .catch((err) => console.error(`[ERROR] Failed to send startup notification: ${err.message}`));
+  .catch((err) => console.error(`[ERROR] Startup failed: ${err.message}`));
 
 bot.launch();
 setInterval(poll, POLL_INTERVAL_MS);
@@ -513,7 +435,7 @@ setInterval(poll, POLL_INTERVAL_MS);
 async function shutdown(signal) {
   console.log(`\n[INFO] ${signal} received, shutting down.`);
   try {
-    await bot.telegram.sendMessage(CHANNEL_ID, '🔴 *Бот остановлен*', { parse_mode: 'Markdown' });
+    await bot.telegram.sendMessage(CHANNEL_ID, T.stopped, { parse_mode: 'Markdown' });
     console.log('[INFO] Shutdown notification sent.');
   } catch (err) {
     console.error(`[ERROR] Failed to send shutdown notification: ${err.message}`);
