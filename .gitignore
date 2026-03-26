@@ -12,6 +12,7 @@ npm-debug.log*
 # Runtime
 pids/
 *.pid
+cities.json
 
 # OS
 .DS_Store

@@ -68,7 +68,7 @@ async function translate(text, sourceLang = SOURCE_LANG, targetLang = TARGET_LAN
     });
 
     req.setTimeout(5000, () => {
-      console.warn('[WARN] LibreTranslate: request timed out — falling back to Russian');
+      console.warn('[WARN] LibreTranslate: request timed out — falling back to source text');
       req.destroy();
       resolve(text);
     });
