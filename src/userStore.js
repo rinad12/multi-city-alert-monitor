@@ -5,7 +5,8 @@ const path = require('path');
 
 const { TARGET_LANG } = require('./config');
 
-const PREFS_FILE   = path.join(__dirname, '..', 'user_prefs.json');
+const PREFS_FILE   = process.env.USER_PREFS_PATH
+  || path.join(__dirname, '..', 'user_prefs.json');
 const SUPPORTED    = new Set(['en', 'he', 'ru']);
 const DEFAULT_LANG = SUPPORTED.has(TARGET_LANG) ? TARGET_LANG : 'en';
 

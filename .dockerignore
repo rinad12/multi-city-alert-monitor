@@ -1,0 +1,29 @@
+# Dependencies — reinstalled inside the image
+node_modules/
+
+# Secrets — injected at runtime via env_file
+.env
+
+# Runtime state — mounted as volumes
+cities.json
+user_prefs.json
+
+# Version control
+.git/
+.gitignore
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Docker files themselves (no need to copy into the image)
+Dockerfile
+.dockerignore
+docker-compose.yml

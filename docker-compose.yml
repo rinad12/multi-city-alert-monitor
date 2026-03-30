@@ -1,0 +1,35 @@
+services:
+  bot:
+    build:
+      context: .
+      target: production
+    image: multi-city-alert-monitor:latest
+    restart: unless-stopped
+
+    # All secrets and configuration come from the .env file on the host.
+    # Never bake .env into the image.
+    env_file: .env
+
+    # Override the default file paths so persistent data lands in the
+    # mounted volume rather than inside the (ephemeral) container filesystem.
+    environment:
+      CITIES_FILE_PATH: /app/persist/cities.json
+      USER_PREFS_PATH:  /app/persist/user_prefs.json
+      NODE_ENV:         production
+
+    volumes:
+      # Named volume — survives container restarts and image updates.
+      - bot_persist:/app/persist
+
+    # Healthcheck mirrors the one in the Dockerfile; shown here explicitly so
+    # `docker compose ps` reports a meaningful health status.
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "node"]
+      interval: 30s
+      timeout:  10s
+      retries:  3
+      start_period: 15s
+
+volumes:
+  bot_persist:
+    driver: local
