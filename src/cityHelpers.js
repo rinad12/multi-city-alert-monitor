@@ -24,6 +24,18 @@ for (const [hebrewName, translations] of Object.entries(alertZones)) {
   }
 }
 
+// ── Prefix index: simple Hebrew city name → first matching full key ───────────
+// Handles the case where alerts/cities.json use a short name ("אשדוד") but
+// alert_zones.json keys use the full label ("אשדוד | אזור לכיש").
+// Maps the part before " | " or " - " to the first matching full key.
+const prefixIndex = new Map();
+for (const hebrewKey of Object.keys(alertZones)) {
+  const prefix = hebrewKey.split(/\s*[|–-]\s*/)[0].trim();
+  if (prefix && prefix !== hebrewKey && !prefixIndex.has(prefix)) {
+    prefixIndex.set(prefix, hebrewKey);
+  }
+}
+
 /**
  * Returns the localised display name for a Hebrew zone name.
  * Falls back to the Hebrew original if the zone is not in the static map
@@ -36,8 +48,18 @@ for (const [hebrewName, translations] of Object.entries(alertZones)) {
  */
 function getLocalizedName(hebrewName, lang = TARGET_LANG) {
   if (lang === 'he') return hebrewName;
+
+  // 1. Exact match (full key like "אשדוד | אזור לכיש")
   const entry = alertZones[hebrewName];
   if (entry && SUPPORTED_LANGS.has(lang) && entry[lang]) return entry[lang];
+
+  // 2. Prefix match (short name like "אשדוד" → first zone that starts with it)
+  const fullKey = prefixIndex.get(hebrewName);
+  if (fullKey) {
+    const prefixEntry = alertZones[fullKey];
+    if (prefixEntry && SUPPORTED_LANGS.has(lang) && prefixEntry[lang]) return prefixEntry[lang];
+  }
+
   return hebrewName; // graceful fallback to Hebrew
 }
 
@@ -70,4 +92,34 @@ function resolveToHebrew(input) {
   return Promise.resolve(hebrew || input);
 }
 
-module.exports = { getLocalizedName, translateCity, resolveToHebrew };
+/**
+ * Returns true if `alertCity` (as received from Pikud HaOref) should trigger
+ * a notification given the current set of monitored cities.
+ *
+ * Matching rules:
+ *   1. Exact:          "תל אביב - מרכז" === "תל אביב - מרכז"
+ *   2. Alert is sub-zone of monitored:
+ *                      "תל אביב - מרכז".startsWith("תל אביב") → true
+ *   3. Monitored is sub-zone of alert (less common, but handles reverse):
+ *                      "תל אביב".startsWith("תל אביב - מרכז") → false, but
+ *                      "תל אביב - מרכז".startsWith("תל אביב") → true (covered above)
+ *
+ * The separator check (space after prefix) prevents "בת ים" from matching
+ * "בת ים וסביבה" AND "בית שמש" from accidentally matching "בית".
+ *
+ * @param {string}      alertCity
+ * @param {Set<string>} monitored
+ * @returns {boolean}
+ */
+function isMonitored(alertCity, monitored) {
+  if (monitored.has(alertCity)) return true;
+  for (const m of monitored) {
+    // alertCity is a sub-zone of a monitored city prefix
+    if (alertCity.startsWith(m + ' ') || alertCity.startsWith(m + '-') || alertCity.startsWith(m + '–')) return true;
+    // monitored city is a sub-zone of the alert city (user added specific zone)
+    if (m.startsWith(alertCity + ' ') || m.startsWith(alertCity + '-') || m.startsWith(alertCity + '–')) return true;
+  }
+  return false;
+}
+
+module.exports = { getLocalizedName, translateCity, resolveToHebrew, isMonitored };

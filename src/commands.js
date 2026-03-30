@@ -1,132 +1,415 @@
 'use strict';
 
-const pikudHaoref = require('pikud-haoref-api');
-const bot                              = require('./bot');
-const cityStore                        = require('./cityStore');
-const { T, citiesList }                = require('./strings');
-const { translateCity, resolveToHebrew } = require('./cityHelpers');
-const { notifyChannel }                = require('./notifier');
+const { Markup }   = require('telegraf');
+const pikudHaoref  = require('pikud-haoref-api');
+const bot          = require('./bot');
+const cityStore    = require('./cityStore');
+const { getT, citiesList }         = require('./strings');
+const { getLocalizedName }         = require('./cityHelpers');
+const { notifyChannel }            = require('./notifier');
+const { getUserLang, setUserLang } = require('./userStore');
+const { searchZones }              = require('./citySearch');
 
-/**
- * Extracts the argument string from a command message.
- * Handles both `/command text` and `/command@botname text` forms.
- */
+// ── Per-user session store ─────────────────────────────────────────────────────
+//
+// Session shapes:
+//   { type: 'add',      results: [{hebrew, label}] }
+//   { type: 'remove',   results: [{hebrew, label}] }
+//   { type: 'setcities', step: 'awaiting_query'|'selecting',
+//                         collected: [{hebrew, label}],
+//                         searchResults: [{hebrew, label}] | null }
+//
+const sessions = new Map();
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
 function getArgs(ctx) {
   return ctx.message.text.split(/\s+/).slice(1).join(' ').trim();
 }
 
-/** Registers all bot commands. Call once before bot.launch(). */
+/** Splits an array into rows of `size` for Telegraf's inlineKeyboard(). */
+function chunk(arr, size) {
+  const rows = [];
+  for (let i = 0; i < arr.length; i += size) rows.push(arr.slice(i, i + size));
+  return rows;
+}
+
+/** Shared: add a city after confirmation/selection in the /addcity flow. */
+async function commitAddCity(ctx, hebrew, label, lang) {
+  const T = getT(lang);
+  sessions.delete(ctx.from.id);
+
+  if (cityStore.getAll().has(hebrew)) {
+    await ctx.answerCbQuery();
+    return ctx.editMessageText(
+      T.cityAlreadyMonitored.replace('%CITY%', label),
+      { parse_mode: 'Markdown' }
+    );
+  }
+
+  cityStore.add(hebrew);
+  const list = await citiesList(cityStore.getAll(), (h) => getLocalizedName(h, lang));
+  const msg  = `${T.cityAdded.replace('%CITY%', label)}\n\n${T.labelNowMonitoring}\n${list}`;
+
+  await ctx.answerCbQuery();
+  ctx.editMessageText(msg, { parse_mode: 'Markdown' });
+  notifyChannel(msg);
+}
+
+/**
+ * Appends a city to an active /setcities session and edits the bot message to
+ * show the running list + a Done button.
+ */
+async function commitSetcitiesAdd(ctx, session, city, lang) {
+  const T = getT(lang);
+
+  if (!session.collected.some((c) => c.hebrew === city.hebrew)) {
+    session.collected.push(city);
+  }
+
+  session.step          = 'awaiting_query';
+  session.searchResults = null;
+
+  const soFar = session.collected.map((c) => `• ${c.label}`).join('\n');
+  const msg   = T.setcitiesAdded
+    .replace('%CITY%', city.label)
+    .replace('%LIST%', soFar);
+
+  await ctx.answerCbQuery();
+  ctx.editMessageText(msg, {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard([[
+      Markup.button.callback(T.setcitiesDoneButton, 'sc_done'),
+    ]]),
+  });
+}
+
+/**
+ * Finalises the /setcities flow: replaces the city store and notifies.
+ * `replyFn` is either ctx.reply (from /done command) or ctx.editMessageText
+ * (from the Done button).
+ */
+async function finishSetcities(ctx, collected, lang, replyFn) {
+  const T = getT(lang);
+  sessions.delete(ctx.from.id);
+
+  if (collected.length === 0) {
+    return replyFn(T.setcitiesNoSelection);
+  }
+
+  cityStore.replace(collected.map((c) => c.hebrew));
+
+  const list = collected.map((c) => `• ${c.label}`).join('\n');
+  const msg  = `${T.setcitiesDone}${list}`;
+
+  replyFn(msg, { parse_mode: 'Markdown' });
+  notifyChannel(msg);
+}
+
+// ── Command registration ───────────────────────────────────────────────────────
+
 function registerCommands() {
 
-  // ── /cities ────────────────────────────────────────────────────────────────
+  // ── /language ────────────────────────────────────────────────────────────────
+  bot.command('language', (ctx) => {
+    const T = getT(getUserLang(ctx.from.id, ctx.from.language_code));
+    ctx.reply(T.languagePrompt, Markup.inlineKeyboard([[
+      Markup.button.callback('🇬🇧 English', 'lc:en'),
+      Markup.button.callback('🇮🇱 עברית',   'lc:he'),
+      Markup.button.callback('🇷🇺 Русский',  'lc:ru'),
+    ]]));
+  });
+
+  // ── /cities ──────────────────────────────────────────────────────────────────
   bot.command('cities', async (ctx) => {
-    const list = await citiesList(cityStore.getAll(), translateCity);
+    const lang = getUserLang(ctx.from.id, ctx.from.language_code);
+    const T    = getT(lang);
+    const list = await citiesList(cityStore.getAll(), (h) => getLocalizedName(h, lang));
     ctx.reply(`${T.citiesHeader}\n\n${list}`, { parse_mode: 'Markdown' });
   });
 
-  // ── /addcity <city1,city2,...> ─────────────────────────────────────────────
-  bot.command('addcity', async (ctx) => {
-    const args = getArgs(ctx);
-    if (!args) return ctx.reply(T.addcityUsage);
+  // ── /addcity <query> ──────────────────────────────────────────────────────────
+  bot.command('addcity', (ctx) => {
+    const lang  = getUserLang(ctx.from.id, ctx.from.language_code);
+    const T     = getT(lang);
+    const query = getArgs(ctx);
 
-    const incoming = await Promise.all(args.split(',').map((c) => resolveToHebrew(c.trim())));
-    const added    = incoming.filter((c) => !cityStore.getAll().has(c));
+    if (!query) return ctx.reply(T.addcityUsage);
 
-    if (added.length === 0) return ctx.reply(T.addcityAlready);
+    const results = searchZones(query, lang, 10);
 
-    cityStore.add(added);
-    console.log(`[INFO] Cities added: ${added.join(', ')}`);
+    if (results.length === 0) {
+      return ctx.reply(
+        T.searchNoResults.replace('%QUERY%', query),
+        { parse_mode: 'Markdown' }
+      );
+    }
 
-    const addedNames = await Promise.all(added.map(translateCity));
-    const list       = await citiesList(cityStore.getAll(), translateCity);
-    const msg =
-      `${T.labelAdded}\n${addedNames.map((n) => `• ${n}`).join('\n')}` +
-      `\n\n${T.labelNowMonitoring}\n${list}`;
+    sessions.set(ctx.from.id, { type: 'add', results });
 
-    ctx.reply(msg, { parse_mode: 'Markdown' });
-    notifyChannel(msg);
+    if (results.length === 1) {
+      return ctx.reply(
+        T.searchConfirm.replace('%CITY%', results[0].label),
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([[
+            Markup.button.callback(T.searchConfirmYes, 'city_y'),
+            Markup.button.callback(T.searchConfirmNo,  'city_n'),
+          ]]),
+        }
+      );
+    }
+
+    const buttons = results.map((r, i) => Markup.button.callback(r.label, `city_a:${i}`));
+    const rows    = chunk(buttons, 2);
+    rows.push([Markup.button.callback(T.actionCancelled, 'city_n')]);
+
+    ctx.reply(
+      T.searchSelectZone
+        .replace('%COUNT%', String(results.length))
+        .replace('%QUERY%', query),
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard(rows),
+      }
+    );
   });
 
-  // ── /removecity <city1,city2,...> ──────────────────────────────────────────
-  bot.command('removecity', async (ctx) => {
-    const args = getArgs(ctx);
-    if (!args) return ctx.reply(T.removecityUsage);
+  // ── /removecity ───────────────────────────────────────────────────────────────
+  bot.command('removecity', (ctx) => {
+    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const T       = getT(lang);
+    const results = [...cityStore.getAll()].map((h) => ({
+      hebrew: h,
+      label:  getLocalizedName(h, lang),
+    }));
 
-    const incoming = await Promise.all(args.split(',').map((c) => resolveToHebrew(c.trim())));
-    const toRemove = incoming.filter((c) =>  cityStore.getAll().has(c));
-    const notFound = incoming.filter((c) => !cityStore.getAll().has(c));
+    sessions.set(ctx.from.id, { type: 'remove', results });
 
-    if (toRemove.length === 0) return ctx.reply(T.removecityNotFound);
-
-    const success = cityStore.remove(toRemove);
-    if (!success) return ctx.reply(T.removecityCannotEmpty);
-
-    console.log(`[INFO] Cities removed: ${toRemove.join(', ')}`);
-
-    const removedNames  = await Promise.all(toRemove.map(translateCity));
-    const notFoundNames = await Promise.all(notFound.map(translateCity));
-    const list          = await citiesList(cityStore.getAll(), translateCity);
-
-    const parts = [`${T.labelRemoved}\n${removedNames.map((n) => `• ${n}`).join('\n')}`];
-    if (notFoundNames.length)
-      parts.push(`${T.labelNotFound}\n${notFoundNames.map((n) => `• ${n}`).join('\n')}`);
-    parts.push(`${T.labelNowMonitoring}\n${list}`);
-
-    const msg = parts.join('\n\n');
-    ctx.reply(msg, { parse_mode: 'Markdown' });
-    notifyChannel(msg);
+    const buttons = results.map((r, i) => Markup.button.callback(r.label, `city_r:${i}`));
+    ctx.reply(T.removecityPrompt, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard(chunk(buttons, 2)),
+    });
   });
 
-  // ── /setcities <city1,city2,...> ───────────────────────────────────────────
-  bot.command('setcities', async (ctx) => {
-    const args = getArgs(ctx);
-    if (!args) return ctx.reply(T.setcitiesUsage);
+  // ── /setcities — iterative search flow ───────────────────────────────────────
+  // Replaces the entire city list by searching one city at a time.
+  // Finish with the Done button or /done.
+  bot.command('setcities', (ctx) => {
+    const lang = getUserLang(ctx.from.id, ctx.from.language_code);
+    const T    = getT(lang);
 
-    const newCities = await Promise.all(args.split(',').map((c) => resolveToHebrew(c.trim())));
-    if (newCities.length === 0) return ctx.reply(T.setcitiesEmpty);
+    sessions.set(ctx.from.id, {
+      type:          'setcities',
+      step:          'awaiting_query',
+      collected:     [],
+      searchResults: null,
+    });
 
-    const added   = newCities.filter((c) => !cityStore.getAll().has(c));
-    const removed = [...cityStore.getAll()].filter((c) => !newCities.includes(c));
-
-    cityStore.replace(newCities);
-    console.log(`[INFO] Cities replaced: ${newCities.join(', ')}`);
-
-    const addedNames   = await Promise.all(added.map(translateCity));
-    const removedNames = await Promise.all(removed.map(translateCity));
-    const list         = await citiesList(cityStore.getAll(), translateCity);
-
-    const parts = [];
-    if (addedNames.length)
-      parts.push(`${T.labelAdded}\n${addedNames.map((n) => `• ${n}`).join('\n')}`);
-    if (removedNames.length)
-      parts.push(`${T.labelRemoved}\n${removedNames.map((n) => `• ${n}`).join('\n')}`);
-    parts.push(`${T.labelNowMonitoring}\n${list}`);
-
-    const msg = parts.join('\n\n');
-    ctx.reply(msg, { parse_mode: 'Markdown' });
-    notifyChannel(msg);
+    ctx.reply(T.setcitiesStart, { parse_mode: 'Markdown' });
   });
 
-  // ── /status ────────────────────────────────────────────────────────────────
+  // ── /done — finalise /setcities ───────────────────────────────────────────────
+  bot.command('done', async (ctx) => {
+    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const session = sessions.get(ctx.from.id);
+
+    if (!session || session.type !== 'setcities') return;
+
+    await finishSetcities(ctx, session.collected, lang, ctx.reply.bind(ctx));
+  });
+
+  // ── /status ───────────────────────────────────────────────────────────────────
   bot.command('status', (ctx) => {
-    pikudHaoref.getActiveAlerts(async (err, alerts) => {
-      if (err) {
-        return ctx.reply(T.statusError.replace('%ERROR%', err.message));
-      }
+    const lang = getUserLang(ctx.from.id, ctx.from.language_code);
+    const T    = getT(lang);
 
-      if (!Array.isArray(alerts) || alerts.length === 0) {
-        return ctx.reply(T.statusAllClear);
-      }
+    pikudHaoref.getActiveAlerts((err, alerts) => {
+      if (err) return ctx.reply(T.statusError.replace('%ERROR%', err.message));
+      if (!Array.isArray(alerts) || alerts.length === 0) return ctx.reply(T.statusAllClear);
 
-      const lines = await Promise.all(
-        alerts.flatMap((alert) =>
-          (alert.cities || []).map(async (city) =>
-            `• ${await translateCity(city)} (${alert.type})`
-          )
+      const lines = alerts.flatMap((alert) =>
+        (alert.cities || []).map((city) =>
+          `• ${getLocalizedName(city, lang)} (${alert.type})`
         )
       );
       ctx.reply(`${T.statusActiveHeader}\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
     });
+  });
+
+  // ── Free-text handler: intercepts search queries during /setcities flow ───────
+  bot.on('text', (ctx) => {
+    // Skip command messages — they are handled above.
+    if (ctx.message.text.startsWith('/')) return;
+
+    const session = sessions.get(ctx.from.id);
+    if (!session || session.type !== 'setcities' || session.step !== 'awaiting_query') return;
+
+    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const T       = getT(lang);
+    const query   = ctx.message.text.trim();
+    const results = searchZones(query, lang, 10);
+
+    if (results.length === 0) {
+      return ctx.reply(
+        T.searchNoResults.replace('%QUERY%', query),
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    session.step          = 'selecting';
+    session.searchResults = results;
+
+    if (results.length === 1) {
+      return ctx.reply(
+        T.searchConfirm.replace('%CITY%', results[0].label),
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([[
+            Markup.button.callback(T.searchConfirmYes, 'sc_y'),
+            Markup.button.callback(T.searchConfirmNo,  'sc_skip'),
+          ]]),
+        }
+      );
+    }
+
+    const buttons = results.map((r, i) => Markup.button.callback(r.label, `sc_a:${i}`));
+    ctx.reply(
+      T.searchSelectZone
+        .replace('%COUNT%', String(results.length))
+        .replace('%QUERY%', query),
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard(chunk(buttons, 2)),
+      }
+    );
+  });
+
+  // ── Callback query handlers ────────────────────────────────────────────────────
+
+  // Language buttons
+  bot.action(/^lc:(en|he|ru)$/, (ctx) => {
+    const newLang = ctx.match[1];
+    setUserLang(ctx.from.id, newLang);
+    ctx.answerCbQuery();
+    ctx.editMessageText(getT(newLang).languageSet, { parse_mode: 'Markdown' });
+  });
+
+  // /addcity: city selected from grid
+  bot.action(/^city_a:(\d+)$/, async (ctx) => {
+    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const session = sessions.get(ctx.from.id);
+    const idx     = parseInt(ctx.match[1], 10);
+
+    if (!session || session.type !== 'add' || !session.results[idx]) {
+      await ctx.answerCbQuery();
+      return ctx.editMessageText(getT(lang).actionExpired);
+    }
+    const { hebrew, label } = session.results[idx];
+    await commitAddCity(ctx, hebrew, label, lang);
+  });
+
+  // /addcity: single match confirmed
+  bot.action('city_y', async (ctx) => {
+    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const session = sessions.get(ctx.from.id);
+
+    if (!session || session.type !== 'add' || !session.results[0]) {
+      await ctx.answerCbQuery();
+      return ctx.editMessageText(getT(lang).actionExpired);
+    }
+    const { hebrew, label } = session.results[0];
+    await commitAddCity(ctx, hebrew, label, lang);
+  });
+
+  // /addcity or /removecity: cancelled
+  bot.action('city_n', (ctx) => {
+    const lang = getUserLang(ctx.from.id, ctx.from.language_code);
+    sessions.delete(ctx.from.id);
+    ctx.answerCbQuery();
+    ctx.editMessageText(getT(lang).actionCancelled);
+  });
+
+  // /removecity: city selected
+  bot.action(/^city_r:(\d+)$/, async (ctx) => {
+    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const T       = getT(lang);
+    const session = sessions.get(ctx.from.id);
+    const idx     = parseInt(ctx.match[1], 10);
+
+    if (!session || session.type !== 'remove' || !session.results[idx]) {
+      await ctx.answerCbQuery();
+      return ctx.editMessageText(T.actionExpired);
+    }
+
+    const { hebrew, label } = session.results[idx];
+    sessions.delete(ctx.from.id);
+
+    if (!cityStore.remove(hebrew)) {
+      await ctx.answerCbQuery();
+      return ctx.editMessageText(T.removecityCannotEmpty, { parse_mode: 'Markdown' });
+    }
+
+    const list = await citiesList(cityStore.getAll(), (h) => getLocalizedName(h, lang));
+    const msg  = `${T.labelRemoved}\n• ${label}\n\n${T.labelNowMonitoring}\n${list}`;
+
+    await ctx.answerCbQuery();
+    ctx.editMessageText(msg, { parse_mode: 'Markdown' });
+    notifyChannel(msg);
+  });
+
+  // /setcities: city selected from grid
+  bot.action(/^sc_a:(\d+)$/, async (ctx) => {
+    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const session = sessions.get(ctx.from.id);
+    const idx     = parseInt(ctx.match[1], 10);
+
+    if (!session || session.type !== 'setcities' || !session.searchResults?.[idx]) {
+      await ctx.answerCbQuery();
+      return ctx.editMessageText(getT(lang).actionExpired);
+    }
+    await commitSetcitiesAdd(ctx, session, session.searchResults[idx], lang);
+  });
+
+  // /setcities: single match confirmed
+  bot.action('sc_y', async (ctx) => {
+    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const session = sessions.get(ctx.from.id);
+
+    if (!session || session.type !== 'setcities' || !session.searchResults?.[0]) {
+      await ctx.answerCbQuery();
+      return ctx.editMessageText(getT(lang).actionExpired);
+    }
+    await commitSetcitiesAdd(ctx, session, session.searchResults[0], lang);
+  });
+
+  // /setcities: skip this result, search again
+  bot.action('sc_skip', (ctx) => {
+    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const session = sessions.get(ctx.from.id);
+
+    if (session && session.type === 'setcities') {
+      session.step          = 'awaiting_query';
+      session.searchResults = null;
+    }
+
+    ctx.answerCbQuery();
+    ctx.editMessageText(getT(lang).setcitiesSearchNext, { parse_mode: 'Markdown' });
+  });
+
+  // /setcities: Done button
+  bot.action('sc_done', async (ctx) => {
+    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const session = sessions.get(ctx.from.id);
+
+    if (!session || session.type !== 'setcities') {
+      await ctx.answerCbQuery();
+      return ctx.editMessageText(getT(lang).actionExpired);
+    }
+
+    await ctx.answerCbQuery();
+    await finishSetcities(ctx, session.collected, lang, ctx.editMessageText.bind(ctx));
   });
 }
 

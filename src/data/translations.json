@@ -128,5 +128,95 @@
     "en": "🔴 *Bot stopped*",
     "he": "🔴 *הבוט נעצר*",
     "ru": "🔴 *Бот остановлен*"
+  },
+  "languagePrompt": {
+    "en": "🌐 Choose your language:",
+    "he": "🌐 בחר שפה:",
+    "ru": "🌐 Выберите язык:"
+  },
+  "languageSet": {
+    "en": "✅ Language set to *English*.",
+    "he": "✅ השפה הוגדרה ל*עברית*.",
+    "ru": "✅ Язык установлен: *Русский*."
+  },
+  "searchNoResults": {
+    "en": "❌ No zones found for *%QUERY%*. Try a different spelling.",
+    "he": "❌ לא נמצאו אזורים עבור *%QUERY%*. נסה איות אחר.",
+    "ru": "❌ Зоны для *%QUERY%* не найдены. Попробуйте другое написание."
+  },
+  "searchSelectZone": {
+    "en": "🔍 Found %COUNT% zones matching *%QUERY%*. Select one:",
+    "he": "🔍 נמצאו %COUNT% אזורים עבור *%QUERY%*. בחר אחד:",
+    "ru": "🔍 Найдено %COUNT% зон по запросу *%QUERY%*. Выберите одну:"
+  },
+  "searchConfirm": {
+    "en": "🔍 Did you mean: *%CITY%*?",
+    "he": "🔍 האם התכוונת ל: *%CITY%*?",
+    "ru": "🔍 Вы имели в виду: *%CITY%*?"
+  },
+  "searchConfirmYes": {
+    "en": "✓ Yes, add it",
+    "he": "✓ כן, הוסף",
+    "ru": "✓ Да, добавить"
+  },
+  "searchConfirmNo": {
+    "en": "✗ Cancel",
+    "he": "✗ ביטול",
+    "ru": "✗ Отмена"
+  },
+  "cityAdded": {
+    "en": "✅ Now monitoring: *%CITY%*",
+    "he": "✅ כעת במעקב: *%CITY%*",
+    "ru": "✅ Теперь отслеживается: *%CITY%*"
+  },
+  "cityAlreadyMonitored": {
+    "en": "ℹ️ *%CITY%* is already being monitored.",
+    "he": "ℹ️ *%CITY%* כבר נמצאת במעקב.",
+    "ru": "ℹ️ *%CITY%* уже отслеживается."
+  },
+  "removecityPrompt": {
+    "en": "➖ Select a city to stop monitoring:",
+    "he": "➖ בחר עיר להסרה ממעקב:",
+    "ru": "➖ Выберите город для удаления из мониторинга:"
+  },
+  "actionCancelled": {
+    "en": "❌ Cancelled.",
+    "he": "❌ בוטל.",
+    "ru": "❌ Отменено."
+  },
+  "actionExpired": {
+    "en": "⚠️ This selection has expired. Please run the command again.",
+    "he": "⚠️ הבחירה פגה. אנא הפעל את הפקודה מחדש.",
+    "ru": "⚠️ Выбор устарел. Пожалуйста, выполните команду снова."
+  },
+  "setcitiesStart": {
+    "en": "🔍 Let's build your city list from scratch.\n\nType a city name to search for it:",
+    "he": "🔍 בואו נבנה את רשימת הערים מחדש.\n\nהקלד שם עיר כדי לחפש:",
+    "ru": "🔍 Давайте составим список городов заново.\n\nВведите название города для поиска:"
+  },
+  "setcitiesAdded": {
+    "en": "✓ Added: *%CITY%*\n\nCities so far:\n%LIST%\n\nSearch for another city, or press Done.",
+    "he": "✓ נוסף: *%CITY%*\n\nערים עד כה:\n%LIST%\n\nחפש עיר נוספת, או לחץ סיום.",
+    "ru": "✓ Добавлен: *%CITY%*\n\nГорода до сих пор:\n%LIST%\n\nИщите ещё город или нажмите Готово."
+  },
+  "setcitiesDoneButton": {
+    "en": "✅ Done",
+    "he": "✅ סיום",
+    "ru": "✅ Готово"
+  },
+  "setcitiesDone": {
+    "en": "✅ *City list updated:*\n\n",
+    "he": "✅ *רשימת הערים עודכנה:*\n\n",
+    "ru": "✅ *Список городов обновлён:*\n\n"
+  },
+  "setcitiesNoSelection": {
+    "en": "⚠️ No cities selected — list unchanged.",
+    "he": "⚠️ לא נבחרו ערים — הרשימה לא השתנתה.",
+    "ru": "⚠️ Города не выбраны — список не изменён."
+  },
+  "setcitiesSearchNext": {
+    "en": "Search for another city:",
+    "he": "חפש עיר נוספת:",
+    "ru": "Введите название следующего города:"
   }
 }

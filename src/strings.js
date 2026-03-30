@@ -33,15 +33,39 @@ function initTranslations() {
   return Promise.resolve();
 }
 
+// Per-language cache for getT(). Avoids re-building the same object on every
+// command invocation. Only 3 possible languages so memory cost is negligible.
+const langCache = {};
+
 /**
- * Returns a bullet-list of all monitored cities translated to TARGET_LANG.
+ * Returns a flat string map for the requested language, suitable for use in
+ * per-user command handlers.  Falls back to English for any missing key.
+ *
+ * @param {'en'|'he'|'ru'} lang
+ * @returns {Record<string, string>}
+ */
+function getT(lang) {
+  const l = SUPPORTED_LANGS.has(lang) ? lang : 'en';
+  if (langCache[l]) return langCache[l];
+
+  const result = {};
+  for (const [key, variants] of Object.entries(TRANSLATIONS)) {
+    result[key] = variants[l] || variants['en'] || '';
+  }
+  langCache[l] = result;
+  return result;
+}
+
+/**
+ * Returns a bullet-list of all monitored cities translated to the given lang.
+ * `localizeCity` may be sync or async — both are handled via Promise.all.
  *
  * @param {Set<string>} citySet
- * @param {Function}    translateCity - translateCity(hebrewCity) from cityHelpers.js
+ * @param {Function}    localizeCity - (hebrewName) => string | Promise<string>
  */
-async function citiesList(citySet, translateCity) {
-  const names = await Promise.all([...citySet].map((c) => translateCity(c)));
+async function citiesList(citySet, localizeCity) {
+  const names = await Promise.all([...citySet].map((c) => localizeCity(c)));
   return names.map((n) => `• ${n}`).join('\n');
 }
 
-module.exports = { T, initTranslations, citiesList };
+module.exports = { T, initTranslations, getT, citiesList };
