@@ -14,8 +14,7 @@ const { dedupKey, isDuplicate, markSent } = require('./src/dedup');
 const { sendNotification }           = require('./src/notifier');
 const { T, initTranslations }        = require('./src/strings');
 const { registerCommands }           = require('./src/commands');
-const { translateCity }              = require('./src/cityHelpers');
-const { translate }                  = require('./translate');
+const { getLocalizedName, translateCity } = require('./src/cityHelpers');
 
 // ── Global error handlers ─────────────────────────────────────────────────────
 
@@ -44,7 +43,8 @@ async function onAlerts(alerts) {
       const key = dedupKey(alert, city);
       if (isDuplicate(key)) continue;
 
-      const cityName = await translateCity(city);
+      // getLocalizedName is synchronous — no await needed.
+      const cityName = getLocalizedName(city);
       const message  = buildMessage(cityName, alert, T);
       if (!message) continue;
 
@@ -77,17 +77,17 @@ console.log(`[INFO] Monitoring cities: ${[...cityStore.getAll()].join(', ')}`);
 
 registerCommands();
 
-initTranslations(translate)
-  .then(() => Promise.all([...cityStore.getAll()].map((c) => translateCity(c))))
-  .then((names) => {
-    // Launch only after translations are ready so T is populated before any
-    // command handler runs.
+// initTranslations() is synchronous but returns a Promise for API consistency.
+initTranslations()
+  .then(() => {
+    const cityNames = [...cityStore.getAll()].map((c) => getLocalizedName(c)).join(', ');
+
     bot.launch();
     poller.start(onAlerts);
 
     return bot.telegram.sendMessage(
       config.CHANNEL_ID,
-      `${T.startupPrefix} ${names.join(', ')}`,
+      `${T.startupPrefix} ${cityNames}`,
       { parse_mode: 'Markdown' }
     );
   })

@@ -6,7 +6,6 @@ const cityStore                        = require('./cityStore');
 const { T, citiesList }                = require('./strings');
 const { translateCity, resolveToHebrew } = require('./cityHelpers');
 const { notifyChannel }                = require('./notifier');
-const { translate }                    = require('../translate');
 
 /**
  * Extracts the argument string from a command message.
@@ -112,10 +111,7 @@ function registerCommands() {
   bot.command('status', (ctx) => {
     pikudHaoref.getActiveAlerts(async (err, alerts) => {
       if (err) {
-        // Error text is dynamic (contains err.message) — translate on the fly.
-        return ctx.reply(
-          await translate(`⚠️ Failed to fetch data from Home Front Command: ${err.message}`)
-        );
+        return ctx.reply(T.statusError.replace('%ERROR%', err.message));
       }
 
       if (!Array.isArray(alerts) || alerts.length === 0) {

@@ -1,0 +1,132 @@
+{
+  "missiles": {
+    "en": "🚀 *MISSILE ALERT: %CITY%* 🚨\n\nPlease don't worry — the siren has gone off and I am already in a safe place. I won't be able to answer calls until the incident is over. Everything is under control — I'll write as soon as I'm out!",
+    "he": "🚀 *אזעקת טילים: %CITY%* 🚨\n\nאל תדאגו — הצפירה הושמעה ואני כבר במקום מוגן. לא אוכל לענות לשיחות עד שהמצב יסתיים. הכל בשליטה — אכתוב ברגע שאצא!",
+    "ru": "🚀 *РАКЕТНАЯ ТРЕВОГА: %CITY%* 🚨\n\nПожалуйста, не волнуйтесь — сирена сработала, и я уже нахожусь в безопасном месте. Я не смогу отвечать на звонки до окончания тревоги. Всё под контролем — напишу сразу, как выйду!"
+  },
+  "hostileAircraft": {
+    "en": "✈️ *AIR THREAT: %CITY%* 🚨\n\nA suspicious object has been detected in the sky. I am already in a protected space — it's safe here. I won't be able to answer calls until the incident is over. Just following safety protocol and waiting for the all-clear.",
+    "he": "✈️ *איום אווירי: %CITY%* 🚨\n\nזוהה עצם חשוד באוויר. אני כבר במרחב המוגן — כאן בטוח. לא אוכל לענות לשיחות עד שהמצב יסתיים. פשוט מקיים את נהלי הבטיחות וממתין לאות השב.",
+    "ru": "✈️ *ВОЗДУШНАЯ УГРОЗА: %CITY%* 🚨\n\nОбнаружен подозрительный объект в воздухе. Я уже нахожусь в защищённом помещении — здесь безопасно. Не смогу отвечать на звонки до окончания тревоги. Следую протоколу безопасности и жду отбоя."
+  },
+  "earthquake": {
+    "en": "🫨 *EARTHQUAKE: %CITY%* 🚨\n\nGround tremors have been detected. I have moved to open ground as instructed. I'm fine — don't worry!",
+    "he": "🫨 *רעידת אדמה: %CITY%* 🚨\n\nזוהו רעידות קרקע. עברתי לשטח פתוח כנדרש בהנחיות. הכל בסדר — אל תדאגו!",
+    "ru": "🫨 *ЗЕМЛЕТРЯСЕНИЕ: %CITY%* 🚨\n\nЗафиксированы подземные толчки. Я вышел на открытое место согласно инструкциям. Всё в порядке — не волнуйтесь!"
+  },
+  "terroristInfiltration": {
+    "en": "🪖 *SECURITY ALERT: %CITY%* 🚨\n\nSuspected infiltration in the area. I'm at home with the doors locked — everything is fine. I am in a protected room and following instructions.",
+    "he": "🪖 *אירוע ביטחוני: %CITY%* 🚨\n\nחדירה חשודה באזור. אני בבית עם הדלתות נעולות — הכל בסדר. אני בחדר מוגן ומקיים את ההנחיות.",
+    "ru": "🪖 *УГРОЗА БЕЗОПАСНОСТИ: %CITY%* 🚨\n\nПодозрение на проникновение в районе. Я дома, двери заперты — всё в порядке. Нахожусь в защищённой комнате и следую инструкциям."
+  },
+  "tsunami": {
+    "en": "🌊 *TSUNAMI WARNING: %CITY%* 🚨\n\nA tsunami warning has been issued. I have moved to a safe distance from the coastline. Everything is under control.",
+    "he": "🌊 *אזהרת צונאמי: %CITY%* 🚨\n\nהוכרז על אזהרת צונאמי. עברתי למרחק בטוח מהחוף. הכל תחת שליטה.",
+    "ru": "🌊 *ПРЕДУПРЕЖДЕНИЕ О ЦУНАМИ: %CITY%* 🚨\n\nОбъявлено предупреждение о цунами. Я отошёл на безопасное расстояние от берега. Всё под контролем."
+  },
+  "hazmat": {
+    "en": "⚠️ *HAZMAT ALERT: %CITY%* 🚨\n\nA hazardous-materials leak has been reported. I have sealed the windows and am staying indoors. I'm fine — just a precaution.",
+    "he": "⚠️ *חומרים מסוכנים: %CITY%* 🚨\n\nדווח על דליפת חומרים מסוכנים. איטמתי את החלונות ואני נשאר בפנים. הכל בסדר — רק אמצעי זהירות.",
+    "ru": "⚠️ *ОПАСНЫЕ ВЕЩЕСТВА: %CITY%* 🚨\n\nСообщено об утечке опасных веществ. Я заклеил окна и остаюсь в помещении. Всё в порядке — это лишь мера предосторожности."
+  },
+  "allClear": {
+    "en": "✅ *ALL CLEAR: %CITY%* ✅\n\nThe Home Front Command has confirmed the end of the incident. You may leave the shelter. 😊",
+    "he": "✅ *הכל תקין: %CITY%* ✅\n\nפיקוד העורף אישר את סיום האירוע. ניתן לצאת מהמקלט. 😊",
+    "ru": "✅ *ОТБОЙ: %CITY%* ✅\n\nПикуд ха-Орэф подтвердил окончание инцидента. Можно покинуть укрытие. 😊"
+  },
+  "newsFlashShelter": {
+    "en": "🔔 *NOTICE: %CITY%* 🔔\n\nInstructions have been given to stay near a protected space. I'm already nearby — everything is fine, just a precaution.",
+    "he": "🔔 *הודעה: %CITY%* 🔔\n\nניתנו הוראות להישאר בקרבת מרחב מוגן. אני כבר בקרבת מקום — הכל בסדר, רק אמצעי זהירות.",
+    "ru": "🔔 *УВЕДОМЛЕНИЕ: %CITY%* 🔔\n\nДана команда оставаться вблизи защищённого помещения. Я уже рядом — всё в порядке, это лишь мера предосторожности."
+  },
+  "defaultAlert": {
+    "en": "🚨 *ALERT: %CITY%* 🚨\n\nThis message was sent automatically — a siren has gone off in the area. I am following safety instructions and am in a protected space.",
+    "he": "🚨 *אזעקה: %CITY%* 🚨\n\nהודעה זו נשלחה אוטומטית — צפירה הושמעה באזור. אני מקיים הנחיות בטיחות ונמצא במרחב מוגן.",
+    "ru": "🚨 *ТРЕВОГА: %CITY%* 🚨\n\nЭто сообщение отправлено автоматически — в районе сработала сирена. Я следую инструкциям безопасности и нахожусь в укрытии."
+  },
+  "citiesHeader": {
+    "en": "📍 *Monitored cities:*",
+    "he": "📍 *ערים במעקב:*",
+    "ru": "📍 *Отслеживаемые города:*"
+  },
+  "addcityUsage": {
+    "en": "ℹ️ Usage: /addcity בת ים,תל אביב",
+    "he": "ℹ️ שימוש: /addcity בת ים,תל אביב",
+    "ru": "ℹ️ Использование: /addcity בת ים,תל אביב"
+  },
+  "addcityAlready": {
+    "en": "ℹ️ All specified cities are already being monitored.",
+    "he": "ℹ️ כל הערים שצוינו כבר נמצאות במעקב.",
+    "ru": "ℹ️ Все указанные города уже отслеживаются."
+  },
+  "removecityUsage": {
+    "en": "ℹ️ Usage: /removecity בת ים,תל אביב",
+    "he": "ℹ️ שימוש: /removecity בת ים,תל אביב",
+    "ru": "ℹ️ Использование: /removecity בת ים,תל אביב"
+  },
+  "removecityNotFound": {
+    "en": "ℹ️ None of the specified cities were found in the list.",
+    "he": "ℹ️ אף אחת מהערים שצוינו לא נמצאה ברשימה.",
+    "ru": "ℹ️ Ни один из указанных городов не найден в списке."
+  },
+  "removecityCannotEmpty": {
+    "en": "⚠️ Cannot remove all cities — the list must contain at least one.",
+    "he": "⚠️ לא ניתן להסיר את כל הערים — הרשימה חייבת להכיל לפחות עיר אחת.",
+    "ru": "⚠️ Невозможно удалить все города — в списке должен остаться хотя бы один."
+  },
+  "setcitiesUsage": {
+    "en": "ℹ️ Usage: /setcities בת ים,תל אביב",
+    "he": "ℹ️ שימוש: /setcities בת ים,תל אביב",
+    "ru": "ℹ️ Использование: /setcities בת ים,תל אביב"
+  },
+  "setcitiesEmpty": {
+    "en": "⚠️ The city list cannot be empty.",
+    "he": "⚠️ רשימת הערים אינה יכולה להיות ריקה.",
+    "ru": "⚠️ Список городов не может быть пустым."
+  },
+  "statusAllClear": {
+    "en": "✅ All clear — no active alerts.",
+    "he": "✅ הכל תקין — אין התרעות פעילות.",
+    "ru": "✅ Отбой — нет активных тревог."
+  },
+  "statusActiveHeader": {
+    "en": "🚨 *Active alerts:*",
+    "he": "🚨 *התרעות פעילות:*",
+    "ru": "🚨 *Активные тревоги:*"
+  },
+  "statusError": {
+    "en": "⚠️ Failed to fetch data from Home Front Command: %ERROR%",
+    "he": "⚠️ שגיאה בקבלת נתונים מפיקוד העורף: %ERROR%",
+    "ru": "⚠️ Не удалось получить данные от Пикуд ха-Орэф: %ERROR%"
+  },
+  "labelAdded": {
+    "en": "➕ *Added:*",
+    "he": "➕ *נוספו:*",
+    "ru": "➕ *Добавлены:*"
+  },
+  "labelRemoved": {
+    "en": "➖ *No longer monitoring:*",
+    "he": "➖ *הוסרו ממעקב:*",
+    "ru": "➖ *Удалены из мониторинга:*"
+  },
+  "labelNotFound": {
+    "en": "❓ *Not found in list:*",
+    "he": "❓ *לא נמצאו ברשימה:*",
+    "ru": "❓ *Не найдены в списке:*"
+  },
+  "labelNowMonitoring": {
+    "en": "📍 *Now monitoring:*",
+    "he": "📍 *כעת במעקב:*",
+    "ru": "📍 *Сейчас отслеживаются:*"
+  },
+  "startupPrefix": {
+    "en": "✅ *Bot started and running*\n\nMonitoring cities:",
+    "he": "✅ *הבוט הופעל ופועל*\n\nערים במעקב:",
+    "ru": "✅ *Бот запущен и работает*\n\nОтслеживаемые города:"
+  },
+  "stopped": {
+    "en": "🔴 *Bot stopped*",
+    "he": "🔴 *הבוט נעצר*",
+    "ru": "🔴 *Бот остановлен*"
+  }
+}

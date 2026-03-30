@@ -12,10 +12,8 @@ const {
   BOT_TOKEN,
   CHANNEL_ID,
   TARGET_CITIES_HEBREW = '',
-  // LibreTranslate
+  // Language for bot messages and city name display (en, he, ru)
   TARGET_LANG          = 'en',
-  LIBRE_TRANSLATE_URL  = 'http://localhost:5000',
-  LIBRE_TRANSLATE_KEY  = '',
   // Paths
   CITIES_FILE_PATH,
   // Tunable constants (all have sensible defaults)
@@ -41,8 +39,6 @@ module.exports = Object.freeze({
   CHANNEL_ID,
   TARGET_CITIES_HEBREW,
   TARGET_LANG:         TARGET_LANG.toLowerCase(),
-  LIBRE_TRANSLATE_URL,
-  LIBRE_TRANSLATE_KEY,
   CITIES_FILE_PATH,
   POLL_INTERVAL_MS:    parseInt(_POLL,      10),
   BACKOFF_INTERVAL_MS: parseInt(_BACKOFF,   10),
