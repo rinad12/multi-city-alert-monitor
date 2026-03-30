@@ -14,7 +14,7 @@ const { dedupKey, isDuplicate, markSent } = require('./src/dedup');
 const { sendNotification }           = require('./src/notifier');
 const { T, initTranslations }        = require('./src/strings');
 const { registerCommands }           = require('./src/commands');
-const { getLocalizedName, translateCity } = require('./src/cityHelpers');
+const { getLocalizedName, translateCity, isMonitored } = require('./src/cityHelpers');
 
 // ── Global error handlers ─────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ async function onAlerts(alerts) {
     if (!Array.isArray(alert.cities)) continue;
 
     for (const city of alert.cities) {
-      if (!cityStore.getAll().has(city)) continue;
+      if (!isMonitored(city, cityStore.getAll())) continue;
       if ((alert.type || '').endsWith(DRILL_SUFFIX)) continue;
 
       if (config.DEBUG) {

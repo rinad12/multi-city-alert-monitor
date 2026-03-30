@@ -3,9 +3,11 @@
 const fs   = require('fs');
 const path = require('path');
 
+const { TARGET_LANG } = require('./config');
+
 const PREFS_FILE   = path.join(__dirname, '..', 'user_prefs.json');
 const SUPPORTED    = new Set(['en', 'he', 'ru']);
-const DEFAULT_LANG = 'en';
+const DEFAULT_LANG = SUPPORTED.has(TARGET_LANG) ? TARGET_LANG : 'en';
 
 // In-memory store: userId (string) → { lang }
 const store = new Map();
@@ -38,15 +40,9 @@ function save() {
  * @param {string}        [telegramLang]  ctx.from.language_code
  * @returns {'en'|'he'|'ru'}
  */
-function getUserLang(userId, telegramLang) {
+function getUserLang(userId) {
   const prefs = store.get(String(userId));
   if (prefs && SUPPORTED.has(prefs.lang)) return prefs.lang;
-
-  if (telegramLang) {
-    const code = telegramLang.slice(0, 2).toLowerCase();
-    if (SUPPORTED.has(code)) return code;
-  }
-
   return DEFAULT_LANG;
 }
 

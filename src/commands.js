@@ -112,7 +112,7 @@ function registerCommands() {
 
   // ── /language ────────────────────────────────────────────────────────────────
   bot.command('language', (ctx) => {
-    const T = getT(getUserLang(ctx.from.id, ctx.from.language_code));
+    const T = getT(getUserLang(ctx.from.id));
     ctx.reply(T.languagePrompt, Markup.inlineKeyboard([[
       Markup.button.callback('🇬🇧 English', 'lc:en'),
       Markup.button.callback('🇮🇱 עברית',   'lc:he'),
@@ -122,7 +122,7 @@ function registerCommands() {
 
   // ── /cities ──────────────────────────────────────────────────────────────────
   bot.command('cities', async (ctx) => {
-    const lang = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang = getUserLang(ctx.from.id);
     const T    = getT(lang);
     const list = await citiesList(cityStore.getAll(), (h) => getLocalizedName(h, lang));
     ctx.reply(`${T.citiesHeader}\n\n${list}`, { parse_mode: 'Markdown' });
@@ -130,7 +130,7 @@ function registerCommands() {
 
   // ── /addcity <query> ──────────────────────────────────────────────────────────
   bot.command('addcity', (ctx) => {
-    const lang  = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang  = getUserLang(ctx.from.id);
     const T     = getT(lang);
     const query = getArgs(ctx);
 
@@ -177,7 +177,7 @@ function registerCommands() {
 
   // ── /removecity ───────────────────────────────────────────────────────────────
   bot.command('removecity', (ctx) => {
-    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang    = getUserLang(ctx.from.id);
     const T       = getT(lang);
     const results = [...cityStore.getAll()].map((h) => ({
       hebrew: h,
@@ -197,7 +197,7 @@ function registerCommands() {
   // Replaces the entire city list by searching one city at a time.
   // Finish with the Done button or /done.
   bot.command('setcities', (ctx) => {
-    const lang = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang = getUserLang(ctx.from.id);
     const T    = getT(lang);
 
     sessions.set(ctx.from.id, {
@@ -212,7 +212,7 @@ function registerCommands() {
 
   // ── /done — finalise /setcities ───────────────────────────────────────────────
   bot.command('done', async (ctx) => {
-    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang    = getUserLang(ctx.from.id);
     const session = sessions.get(ctx.from.id);
 
     if (!session || session.type !== 'setcities') return;
@@ -222,7 +222,7 @@ function registerCommands() {
 
   // ── /status ───────────────────────────────────────────────────────────────────
   bot.command('status', (ctx) => {
-    const lang = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang = getUserLang(ctx.from.id);
     const T    = getT(lang);
 
     pikudHaoref.getActiveAlerts((err, alerts) => {
@@ -246,7 +246,7 @@ function registerCommands() {
     const session = sessions.get(ctx.from.id);
     if (!session || session.type !== 'setcities' || session.step !== 'awaiting_query') return;
 
-    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang    = getUserLang(ctx.from.id);
     const T       = getT(lang);
     const query   = ctx.message.text.trim();
     const results = searchZones(query, lang, 10);
@@ -298,7 +298,7 @@ function registerCommands() {
 
   // /addcity: city selected from grid
   bot.action(/^city_a:(\d+)$/, async (ctx) => {
-    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang    = getUserLang(ctx.from.id);
     const session = sessions.get(ctx.from.id);
     const idx     = parseInt(ctx.match[1], 10);
 
@@ -312,7 +312,7 @@ function registerCommands() {
 
   // /addcity: single match confirmed
   bot.action('city_y', async (ctx) => {
-    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang    = getUserLang(ctx.from.id);
     const session = sessions.get(ctx.from.id);
 
     if (!session || session.type !== 'add' || !session.results[0]) {
@@ -325,7 +325,7 @@ function registerCommands() {
 
   // /addcity or /removecity: cancelled
   bot.action('city_n', (ctx) => {
-    const lang = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang = getUserLang(ctx.from.id);
     sessions.delete(ctx.from.id);
     ctx.answerCbQuery();
     ctx.editMessageText(getT(lang).actionCancelled);
@@ -333,7 +333,7 @@ function registerCommands() {
 
   // /removecity: city selected
   bot.action(/^city_r:(\d+)$/, async (ctx) => {
-    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang    = getUserLang(ctx.from.id);
     const T       = getT(lang);
     const session = sessions.get(ctx.from.id);
     const idx     = parseInt(ctx.match[1], 10);
@@ -361,7 +361,7 @@ function registerCommands() {
 
   // /setcities: city selected from grid
   bot.action(/^sc_a:(\d+)$/, async (ctx) => {
-    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang    = getUserLang(ctx.from.id);
     const session = sessions.get(ctx.from.id);
     const idx     = parseInt(ctx.match[1], 10);
 
@@ -374,7 +374,7 @@ function registerCommands() {
 
   // /setcities: single match confirmed
   bot.action('sc_y', async (ctx) => {
-    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang    = getUserLang(ctx.from.id);
     const session = sessions.get(ctx.from.id);
 
     if (!session || session.type !== 'setcities' || !session.searchResults?.[0]) {
@@ -386,7 +386,7 @@ function registerCommands() {
 
   // /setcities: skip this result, search again
   bot.action('sc_skip', (ctx) => {
-    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang    = getUserLang(ctx.from.id);
     const session = sessions.get(ctx.from.id);
 
     if (session && session.type === 'setcities') {
@@ -400,7 +400,7 @@ function registerCommands() {
 
   // /setcities: Done button
   bot.action('sc_done', async (ctx) => {
-    const lang    = getUserLang(ctx.from.id, ctx.from.language_code);
+    const lang    = getUserLang(ctx.from.id);
     const session = sessions.get(ctx.from.id);
 
     if (!session || session.type !== 'setcities') {
