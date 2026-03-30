@@ -1,4 +1,4 @@
-# custom-israel-alerts-notifier
+# multi-city-alert-monitor
 
 A Telegram bot for real-time alert monitoring in specific Israeli cities with multilingual notifications — no external translation service required.
 
@@ -9,15 +9,17 @@ A Telegram bot for real-time alert monitoring in specific Israeli cities with mu
 ## Features
 
 - Polls the Israeli Home Front Command (Pikud HaOref) API every **2 seconds**
-- Filters alerts to only the cities you care about
-- **Multilingual** — messages in English, Hebrew, or Russian (`TARGET_LANG`); no external service needed
+- Filters alerts to only the cities you care about, including **full district matching** — monitor "Tel Aviv" and receive alerts for all its sub-districts automatically
+- **Multilingual** — English, Hebrew, or Russian; per-user language preference saved automatically
 - City names resolved from a **static zone map** built from official Pikud HaOref data (accurate Israeli place names in all supported languages)
+- **Interactive city search** — `/addcity` shows inline keyboard results, no need to type Hebrew
 - Handles **all alert types** with tailored messages per incident category
 - Detects **newsFlash phase** (shelter vs. all-clear) from Hebrew instruction text
 - **Silently skips drills** — no unnecessary stress for family abroad
-- **Deduplicates** alerts — one notification per unique alert event, no spam
+- **Deduplicates** alerts — one notification per unique event, no spam
 - Startup and shutdown notifications sent to the channel
-- Zero runtime CPU/RAM overhead from translation — all lookups are in-memory Map operations
+- Zero runtime CPU/RAM overhead — all lookups are O(1) in-memory operations
+- Docker-ready with automated zone data refresh at build time
 
 ---
 
@@ -41,45 +43,31 @@ A Telegram bot for real-time alert monitoring in specific Israeli cities with mu
 
 | Requirement | Notes |
 |---|---|
-| Node.js ≥ 18 | Uses `node --watch` for dev mode |
-| npm ≥ 8 | |
+| Node.js ≥ 18 | Or use Docker (recommended for production) |
 | **Network location** | Must run from **within Israel** — the Pikud HaOref API is geo-restricted |
 
 ---
 
-## Setup
+## Quick start
 
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/rinad12/custom-israel-alerts-notifier.git
-cd custom-israel-alerts-notifier
+git clone https://github.com/rinad12/multi-city-alert-monitor.git
+cd multi-city-alert-monitor
 npm install
 ```
 
 ### 2. Create a Telegram bot
 
-1. Start a chat with [@BotFather](https://t.me/BotFather) and send `/newbot`.
-2. Copy the **API token** you receive.
+1. Open [@BotFather](https://t.me/BotFather) and send `/newbot`
+2. Copy the **API token** you receive
 
-### 3. Get your channel / chat ID
+### 3. Get your channel ID
 
-- **Private channel or group**: add the bot as an admin, then retrieve the chat ID via [@userinfobot](https://t.me/userinfobot) or the Telegram API (negative number, e.g. `-1001234567890`).
-- **Personal chat**: use your own numeric user ID.
+Add your bot as admin to a channel or group, then find the chat ID via [@userinfobot](https://t.me/userinfobot) (negative number for channels, e.g. `-1001234567890`).
 
-### 4. Populate the zone map
-
-Run the scraper **once** from inside Israel to build the static city→translation map:
-
-```bash
-node scripts/fetch_alert_zones.js
-```
-
-This fetches the official Pikud HaOref city list in Hebrew, English, and Russian, and writes `src/data/alert_zones.json`. Re-run whenever you want to pick up newly added zones.
-
-> **Note:** The script must be run from within Israel — the Oref API is geo-restricted. If a zone is missing from the map (e.g., added after your last scraper run), the bot falls back to displaying the Hebrew name.
-
-### 5. Configure environment variables
+### 4. Configure environment
 
 ```bash
 cp .env.example .env
@@ -91,140 +79,150 @@ Edit `.env`:
 BOT_TOKEN=123456789:AAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 CHANNEL_ID=-1001234567890
 
-# Hebrew city names as they appear in the Pikud HaOref API (comma-separated)
+# Comma-separated Hebrew city names (used for initial startup only)
+# You can manage cities at runtime via /addcity instead
 TARGET_CITIES_HEBREW=אשקלון,אשדוד,שדרות
 
-# Language for all bot messages: en, he, or ru
+# Default language for bot messages: en, he, or ru
 TARGET_LANG=ru
 ```
 
-City names in `TARGET_CITIES_HEBREW` must be exact Hebrew strings. Use `/addcity` to add cities in your own language at runtime — the bot resolves them to Hebrew automatically via the zone map.
+### 5. Populate the zone map
+
+Run the scraper **once** from inside Israel to build the static city translation map:
+
+```bash
+node scripts/fetch_alert_zones.js
+```
+
+This fetches the official Pikud HaOref city list in Hebrew, English, and Russian, and writes `src/data/alert_zones.json`. Re-run whenever you want to pick up newly added zones.
+
+> The script must be run from within Israel — the Oref API is geo-restricted. If a zone is missing (e.g. added after your last scraper run), the bot falls back to displaying the Hebrew name.
 
 ### 6. Run
 
 ```bash
-npm start          # production
-npm run dev        # development (auto-restarts on file changes)
-```
-
-Expected startup output:
-
-```
-[INFO] Starting custom-israel-alerts-notifier…
-[INFO] Monitoring cities: אשקלון, אשדוד, שדרות
-[INFO] Loading bot strings for language "ru"…
-[INFO] Bot strings ready.
-[INFO] Alert poller started (interval: 2000ms)
-[INFO] Startup notification sent.
+npm start        # production
+npm run dev      # auto-restart on file changes
 ```
 
 ---
 
 ## Bot commands
 
-All commands accept city names in **your language or Hebrew**.
-
 | Command | Description |
 |---|---|
-| `/cities` | Show the current list of monitored cities |
-| `/addcity <city1,city2,...>` | Add one or more cities |
-| `/removecity <city1,city2,...>` | Remove specific cities |
-| `/setcities <city1,city2,...>` | Replace the entire city list |
+| `/addcity <query>` | Search for a city and add it via inline keyboard |
+| `/removecity` | Show monitored cities as buttons — tap to remove |
+| `/setcities` | Rebuild the entire city list interactively (search one by one) |
+| `/cities` | Show the current monitored city list |
 | `/status` | Query live active alerts right now |
+| `/language` | Change your personal language preference |
 
-**Examples** (with `TARGET_LANG=ru`):
+### Adding cities
+
 ```
-/addcity Ашдод,Тель-Авив
-/addcity תל אביב,חיפה      ← Hebrew also accepted
-/removecity Хайфа
-/setcities Бат-Ям, Ашдод, Сдерот
+/addcity Tel Aviv
+```
+→ Bot shows up to 10 matching zones as inline buttons. Tap to add.
+
+```
+/addcity תל אביב
+```
+→ Hebrew input also accepted. If only one match is found, a confirmation dialog appears instead.
+
+### District matching
+
+Monitoring `"Tel Aviv"` (parent city) automatically covers all sub-districts:
+
+```
+Tel Aviv - Center  ✓
+Tel Aviv - North   ✓
+Tel Aviv - South   ✓
 ```
 
-The monitored list is persisted to `cities.json` and survives bot restarts.
+You can also add specific districts via `/addcity` if you only want alerts for part of a city.
+
+### Language selection
+
+Each user's language is stored individually. Use `/language` to switch between English, Hebrew, and Russian at any time. The default falls back to `TARGET_LANG` from `.env`.
 
 ---
 
 ## Project structure
 
 ```
-custom-israel-alerts-notifier/
+multi-city-alert-monitor/
 ├── scripts/
-│   └── fetch_alert_zones.js   # One-time scraper: builds src/data/alert_zones.json
+│   └── fetch_alert_zones.js   # Scraper: builds src/data/alert_zones.json
 ├── src/
 │   ├── data/
 │   │   ├── alert_zones.json   # Hebrew → {en, ru} zone name map (generated)
 │   │   └── translations.json  # Bot UI strings in en, he, ru
-│   ├── config.js              # Env vars, validation, all tunable constants
-│   ├── bot.js                 # Singleton Telegraf instance
-│   ├── cityStore.js           # City list persistence (cities.json)
-│   ├── cityHelpers.js         # getLocalizedName(), translateCity(), resolveToHebrew()
-│   ├── dedup.js               # Alert deduplication (Map + TTL)
-│   ├── alertMessages.js       # buildMessage() — pure, no I/O
+│   ├── alertMessages.js       # buildMessage() — maps alert type to template
 │   ├── alertPoller.js         # Polling loop with exponential backoff
-│   ├── notifier.js            # sendNotification() with retry, notifyChannel()
-│   ├── strings.js             # initTranslations() — loads translations.json
-│   └── commands.js            # Bot command handlers
+│   ├── bot.js                 # Singleton Telegraf instance
+│   ├── cityHelpers.js         # getLocalizedName(), isMonitored()
+│   ├── citySearch.js          # Fuzzy zone search against alert_zones.json
+│   ├── cityStore.js           # City list persistence (cities.json)
+│   ├── commands.js            # Bot command + callback query handlers
+│   ├── config.js              # Env vars, validation, tunable constants
+│   ├── dedup.js               # Alert deduplication (Map + TTL)
+│   ├── notifier.js            # Telegram send with retry
+│   ├── strings.js             # i18n helpers: initTranslations(), getT()
+│   └── userStore.js           # Per-user language persistence (user_prefs.json)
 ├── index.js                   # Entry point — wires modules, startup, shutdown
-├── cities.json                # Runtime city list (auto-created, gitignored)
+├── Dockerfile                 # Multi-stage build with scraper pre-baked
+├── docker-compose.yml         # Production deployment
 ├── package.json
-├── .env                       # Secrets — never commit
-├── .env.example               # Template with all supported variables
+├── .env.example               # Config template
 └── .gitignore
 ```
 
 ---
 
-## Supported languages
+## Docker deployment (production)
 
-| Code | Language |
-|---|---|
-| `en` | English (default) |
-| `he` | Hebrew |
-| `ru` | Russian |
+Build and run from an Israeli server (required for the scraper to fetch zone data during build):
 
-To add another language: add a new key to every entry in `src/data/translations.json` and `src/data/alert_zones.json`, then update `SUPPORTED_LANGS` in `src/cityHelpers.js` and `src/strings.js`.
+```bash
+git clone https://github.com/rinad12/multi-city-alert-monitor.git
+cd multi-city-alert-monitor
+cp .env.example .env   # fill in BOT_TOKEN and CHANNEL_ID
+
+docker compose build   # runs scraper, validates zone data, builds image
+docker compose up -d   # start in background
+docker compose logs -f # tail logs
+```
+
+The build **fails intentionally** if the Pikud HaOref API is unreachable or returns empty data — preventing deployment of a broken image.
+
+Runtime state (`cities.json`, `user_prefs.json`) is stored in a named Docker volume and survives container restarts and image updates.
+
+To update the zone data after Pikud HaOref adds new areas:
+
+```bash
+docker compose build --no-cache
+docker compose up -d
+```
 
 ---
 
 ## Tunable constants
 
-All of these can be overridden in `.env` without touching code:
+All can be overridden in `.env` without touching code:
 
 | Variable | Default | Description |
 |---|---|---|
+| `TARGET_LANG` | `en` | Default language: `en`, `he`, or `ru` |
 | `POLL_INTERVAL_MS` | `2000` | How often to poll the HFC API |
-| `BACKOFF_INTERVAL_MS` | `5000` | Pause duration after repeated errors |
+| `BACKOFF_INTERVAL_MS` | `5000` | Pause after repeated errors |
 | `BACKOFF_THRESHOLD` | `3` | Consecutive errors before backoff kicks in |
 | `DEDUP_TTL_MS` | `600000` | Alert dedup window (10 minutes) |
 | `SEND_MAX_RETRIES` | `3` | Telegram send retry attempts |
 | `CITIES_FILE_PATH` | `./cities.json` | Path to the persistent city list |
-| `DEBUG` | `false` | Set to `true` to log full alert objects |
-
----
-
-## Running as a persistent service
-
-**PM2 (Linux / VPS):**
-
-```bash
-npm install -g pm2
-pm2 start index.js --name israel-alerts
-pm2 save
-pm2 startup   # follow the printed command to enable auto-start on reboot
-```
-
-**Docker Compose:**
-
-```yaml
-services:
-  bot:
-    image: node:18-alpine
-    working_dir: /app
-    volumes: [".:/app"]
-    command: npm start
-    env_file: .env
-    restart: unless-stopped
-```
+| `USER_PREFS_PATH` | `./user_prefs.json` | Path to per-user language preferences |
+| `DEBUG` | `false` | Log full alert objects for debugging |
 
 ---
 
@@ -236,7 +234,7 @@ services:
 | [`telegraf`](https://telegraf.js.org/) | Telegram Bot framework for Node.js |
 | [`dotenv`](https://github.com/motdotla/dotenv) | Load environment variables from `.env` |
 
-All localisation is handled via static JSON files — no external translation service or additional npm dependencies required.
+All localisation is handled via static JSON files — no external translation service or additional npm packages required.
 
 ---
 
