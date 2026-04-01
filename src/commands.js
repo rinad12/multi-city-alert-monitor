@@ -225,16 +225,37 @@ function registerCommands() {
     const lang = getUserLang(ctx.from.id);
     const T    = getT(lang);
 
-    pikudHaoref.getActiveAlerts((err, alerts) => {
-      if (err) return ctx.reply(T.statusError.replace('%ERROR%', err.message));
-      if (!Array.isArray(alerts) || alerts.length === 0) return ctx.reply(T.statusAllClear);
+    pikudHaoref.getActiveAlerts(async (err, alerts) => {
+      try {
+        if (err) {
+          await ctx.reply(T.statusError.replace('%ERROR%', err.message));
+          return;
+        }
+        if (!Array.isArray(alerts) || alerts.length === 0) {
+          await ctx.reply(T.statusAllClear);
+          return;
+        }
 
-      const lines = alerts.flatMap((alert) =>
-        (alert.cities || []).map((city) =>
-          `• ${getLocalizedName(city, lang)} (${alert.type})`
-        )
-      );
-      ctx.reply(`${T.statusActiveHeader}\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+        const lines = alerts.flatMap((alert) =>
+          (alert.cities || []).map((city) =>
+            `• ${getLocalizedName(city, lang)} (${alert.type})`
+          )
+        );
+
+        // Telegram's message limit is 4096 characters.  Trim the city list
+        // before joining so we never send an oversized message.
+        const header   = `${T.statusActiveHeader}\n\n`;
+        const maxBody  = 4096 - header.length - 2; // 2 = '…\n'
+        let   body     = lines.join('\n');
+        if (body.length > maxBody) {
+          body = body.slice(0, body.lastIndexOf('\n', maxBody)) + '\n…';
+        }
+
+        await ctx.reply(header + body, { parse_mode: 'Markdown' });
+      } catch (e) {
+        console.error(`[ERROR] /status reply failed: ${e.message}`);
+        ctx.reply(T.statusError.replace('%ERROR%', e.message)).catch(() => {});
+      }
     });
   });
 
