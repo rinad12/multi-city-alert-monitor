@@ -118,6 +118,18 @@ function isMonitored(alertCity, monitored) {
     if (alertCity.startsWith(m + ' ') || alertCity.startsWith(m + '-') || alertCity.startsWith(m + '–')) return true;
     // monitored city is a sub-zone of the alert city (user added specific zone)
     if (m.startsWith(alertCity + ' ') || m.startsWith(alertCity + '-') || m.startsWith(alertCity + '–')) return true;
+
+    // Handle zone keys stored from /addcity (format: "רמת גן | אזור דן").
+    // The Oref API sends the bare city name or a hyphen-suffixed sub-area
+    // ("רמת גן - מזרח"), so strip the " | <region>" part and re-check.
+    const pipeIdx = m.indexOf(' | ');
+    if (pipeIdx !== -1) {
+      const cityPrefix = m.slice(0, pipeIdx);
+      if (alertCity === cityPrefix ||
+          alertCity.startsWith(cityPrefix + ' ') ||
+          alertCity.startsWith(cityPrefix + '-') ||
+          alertCity.startsWith(cityPrefix + '–')) return true;
+    }
   }
   return false;
 }
