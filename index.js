@@ -49,7 +49,7 @@ async function onAlerts(alerts) {
       if (!message) continue;
 
       markSent(key);
-      sendNotification(message, `${alert.type} / ${city}`);
+      await sendNotification(message, `${alert.type} / ${city}`);
     }
   }
 }
