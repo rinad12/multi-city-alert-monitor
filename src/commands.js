@@ -8,7 +8,7 @@ const { getT, citiesList }         = require('./strings');
 const { getLocalizedName }         = require('./cityHelpers');
 const { notifyChannel }            = require('./notifier');
 const { getUserLang, setUserLang } = require('./userStore');
-const { searchZones }              = require('./citySearch');
+const { searchCities }             = require('./cityDistricts');
 
 // ── Per-user session store ─────────────────────────────────────────────────────
 //
@@ -106,6 +106,44 @@ async function finishSetcities(ctx, collected, lang, replyFn) {
   notifyChannel(msg);
 }
 
+// ── District selection helper ──────────────────────────────────────────────────
+
+/**
+ * Shows a district selection menu for a city group.
+ * Used by both /addcity and /setcities flows.
+ *
+ * @param {object}   ctx
+ * @param {string}   sessionType  - 'add' | 'setcities'
+ * @param {object}   group        - { prefix, label, districts }
+ * @param {string}   lang
+ */
+function showDistrictMenu(ctx, sessionType, group, lang) {
+  const T = getT(lang);
+
+  sessions.set(ctx.from.id, {
+    type:        sessionType,
+    step:        'district_select',
+    prefix:      group.prefix,
+    prefixLabel: group.label,
+    districts:   group.districts,
+  });
+
+  const allLabel = T.districtAllCity.replace('%CITY%', group.label);
+  const allAction = sessionType === 'add' ? 'city_ga' : 'sc_ga';
+
+  const districtButtons = group.districts.map((d, i) =>
+    Markup.button.callback(d.label, `${sessionType === 'add' ? 'city_d' : 'sc_d'}:${i}`)
+  );
+  const rows = chunk(districtButtons, 2);
+  rows.unshift([Markup.button.callback(allLabel, allAction)]);
+  rows.push([Markup.button.callback(T.actionCancelled, 'city_n')]);
+
+  ctx.reply(
+    T.districtSelectPrompt.replace('%CITY%', group.label),
+    { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
+  );
+}
+
 // ── Command registration ───────────────────────────────────────────────────────
 
 function registerCommands() {
@@ -136,20 +174,25 @@ function registerCommands() {
 
     if (!query) return ctx.reply(T.addcityUsage);
 
-    const results = searchZones(query, lang, 10);
+    const groups = searchCities(query, lang, 10);
 
-    if (results.length === 0) {
+    if (groups.length === 0) {
       return ctx.reply(
         T.searchNoResults.replace('%QUERY%', query),
         { parse_mode: 'Markdown' }
       );
     }
 
-    sessions.set(ctx.from.id, { type: 'add', results });
+    // Single result with districts → go straight to district selection.
+    if (groups.length === 1 && groups[0].districts.length > 0) {
+      return showDistrictMenu(ctx, 'add', groups[0], lang);
+    }
 
-    if (results.length === 1) {
+    // Single result with no districts → confirm and add.
+    if (groups.length === 1) {
+      sessions.set(ctx.from.id, { type: 'add', step: 'confirming', groups });
       return ctx.reply(
-        T.searchConfirm.replace('%CITY%', results[0].label),
+        T.searchConfirm.replace('%CITY%', groups[0].label),
         {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([[
@@ -160,18 +203,17 @@ function registerCommands() {
       );
     }
 
-    const buttons = results.map((r, i) => Markup.button.callback(r.label, `city_a:${i}`));
+    // Multiple results → show city grid; district selection happens on pick.
+    sessions.set(ctx.from.id, { type: 'add', step: 'selecting', groups });
+    const buttons = groups.map((g, i) => Markup.button.callback(g.label, `city_a:${i}`));
     const rows    = chunk(buttons, 2);
     rows.push([Markup.button.callback(T.actionCancelled, 'city_n')]);
 
     ctx.reply(
       T.searchSelectZone
-        .replace('%COUNT%', String(results.length))
+        .replace('%COUNT%', String(groups.length))
         .replace('%QUERY%', query),
-      {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard(rows),
-      }
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
     );
   });
 
@@ -267,24 +309,30 @@ function registerCommands() {
     const session = sessions.get(ctx.from.id);
     if (!session || session.type !== 'setcities' || session.step !== 'awaiting_query') return;
 
-    const lang    = getUserLang(ctx.from.id);
-    const T       = getT(lang);
-    const query   = ctx.message.text.trim();
-    const results = searchZones(query, lang, 10);
+    const lang   = getUserLang(ctx.from.id);
+    const T      = getT(lang);
+    const query  = ctx.message.text.trim();
+    const groups = searchCities(query, lang, 10);
 
-    if (results.length === 0) {
+    if (groups.length === 0) {
       return ctx.reply(
         T.searchNoResults.replace('%QUERY%', query),
         { parse_mode: 'Markdown' }
       );
     }
 
-    session.step          = 'selecting';
-    session.searchResults = results;
+    // Single result with districts → go straight to district selection.
+    if (groups.length === 1 && groups[0].districts.length > 0) {
+      session.step = 'district_select';
+      return showDistrictMenu(ctx, 'setcities', groups[0], lang);
+    }
 
-    if (results.length === 1) {
+    // Single result with no districts → confirm.
+    if (groups.length === 1) {
+      session.step          = 'selecting';
+      session.searchResults = groups;
       return ctx.reply(
-        T.searchConfirm.replace('%CITY%', results[0].label),
+        T.searchConfirm.replace('%CITY%', groups[0].label),
         {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([[
@@ -295,15 +343,14 @@ function registerCommands() {
       );
     }
 
-    const buttons = results.map((r, i) => Markup.button.callback(r.label, `sc_a:${i}`));
+    session.step          = 'selecting';
+    session.searchResults = groups;
+    const buttons = groups.map((g, i) => Markup.button.callback(g.label, `sc_a:${i}`));
     ctx.reply(
       T.searchSelectZone
-        .replace('%COUNT%', String(results.length))
+        .replace('%COUNT%', String(groups.length))
         .replace('%QUERY%', query),
-      {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard(chunk(buttons, 2)),
-      }
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard(chunk(buttons, 2)) }
     );
   });
 
@@ -323,24 +370,59 @@ function registerCommands() {
     const session = sessions.get(ctx.from.id);
     const idx     = parseInt(ctx.match[1], 10);
 
-    if (!session || session.type !== 'add' || !session.results[idx]) {
+    if (!session || session.type !== 'add' || !session.groups?.[idx]) {
       await ctx.answerCbQuery();
       return ctx.editMessageText(getT(lang).actionExpired);
     }
-    const { hebrew, label } = session.results[idx];
-    await commitAddCity(ctx, hebrew, label, lang);
+
+    await ctx.answerCbQuery();
+    const group = session.groups[idx];
+
+    // City has districts → show district selection menu.
+    if (group.districts.length > 0) {
+      return showDistrictMenu(ctx, 'add', group, lang);
+    }
+
+    // No districts → add the whole city directly.
+    await commitAddCity(ctx, group.prefix, group.label, lang);
   });
 
-  // /addcity: single match confirmed
+  // /addcity: single match confirmed (no districts)
   bot.action('city_y', async (ctx) => {
     const lang    = getUserLang(ctx.from.id);
     const session = sessions.get(ctx.from.id);
 
-    if (!session || session.type !== 'add' || !session.results[0]) {
+    if (!session || session.type !== 'add' || !session.groups?.[0]) {
       await ctx.answerCbQuery();
       return ctx.editMessageText(getT(lang).actionExpired);
     }
-    const { hebrew, label } = session.results[0];
+    const g = session.groups[0];
+    await commitAddCity(ctx, g.prefix, g.label, lang);
+  });
+
+  // /addcity: "All of <city>" selected from district menu
+  bot.action('city_ga', async (ctx) => {
+    const lang    = getUserLang(ctx.from.id);
+    const session = sessions.get(ctx.from.id);
+
+    if (!session || session.type !== 'add' || session.step !== 'district_select') {
+      await ctx.answerCbQuery();
+      return ctx.editMessageText(getT(lang).actionExpired);
+    }
+    await commitAddCity(ctx, session.prefix, session.prefixLabel, lang);
+  });
+
+  // /addcity: specific district selected
+  bot.action(/^city_d:(\d+)$/, async (ctx) => {
+    const lang    = getUserLang(ctx.from.id);
+    const session = sessions.get(ctx.from.id);
+    const idx     = parseInt(ctx.match[1], 10);
+
+    if (!session || session.type !== 'add' || session.step !== 'district_select' || !session.districts?.[idx]) {
+      await ctx.answerCbQuery();
+      return ctx.editMessageText(getT(lang).actionExpired);
+    }
+    const { hebrew, label } = session.districts[idx];
     await commitAddCity(ctx, hebrew, label, lang);
   });
 
@@ -390,7 +472,10 @@ function registerCommands() {
       await ctx.answerCbQuery();
       return ctx.editMessageText(getT(lang).actionExpired);
     }
-    await commitSetcitiesAdd(ctx, session, session.searchResults[idx], lang);
+    await ctx.answerCbQuery();
+    const group = session.searchResults[idx];
+    if (group.districts.length > 0) return showDistrictMenu(ctx, 'setcities', group, lang);
+    await commitSetcitiesAdd(ctx, session, { hebrew: group.prefix, label: group.label }, lang);
   });
 
   // /setcities: single match confirmed
@@ -402,7 +487,36 @@ function registerCommands() {
       await ctx.answerCbQuery();
       return ctx.editMessageText(getT(lang).actionExpired);
     }
-    await commitSetcitiesAdd(ctx, session, session.searchResults[0], lang);
+    await ctx.answerCbQuery();
+    const group = session.searchResults[0];
+    if (group.districts.length > 0) return showDistrictMenu(ctx, 'setcities', group, lang);
+    await commitSetcitiesAdd(ctx, session, { hebrew: group.prefix, label: group.label }, lang);
+  });
+
+  // /setcities: "All of <city>" from district menu
+  bot.action('sc_ga', async (ctx) => {
+    const lang    = getUserLang(ctx.from.id);
+    const session = sessions.get(ctx.from.id);
+
+    if (!session || session.type !== 'setcities' || session.step !== 'district_select') {
+      await ctx.answerCbQuery();
+      return ctx.editMessageText(getT(lang).actionExpired);
+    }
+    await commitSetcitiesAdd(ctx, session, { hebrew: session.prefix, label: session.prefixLabel }, lang);
+  });
+
+  // /setcities: specific district selected
+  bot.action(/^sc_d:(\d+)$/, async (ctx) => {
+    const lang    = getUserLang(ctx.from.id);
+    const session = sessions.get(ctx.from.id);
+    const idx     = parseInt(ctx.match[1], 10);
+
+    if (!session || session.type !== 'setcities' || session.step !== 'district_select' || !session.districts?.[idx]) {
+      await ctx.answerCbQuery();
+      return ctx.editMessageText(getT(lang).actionExpired);
+    }
+    const { hebrew, label } = session.districts[idx];
+    await commitSetcitiesAdd(ctx, session, { hebrew, label }, lang);
   });
 
   // /setcities: skip this result, search again

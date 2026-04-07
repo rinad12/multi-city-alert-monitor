@@ -33,23 +33,28 @@ async function onAlerts(alerts) {
     if (!Array.isArray(alert.cities)) continue;
 
     for (const city of alert.cities) {
-      if (!isMonitored(city, cityStore.getAll())) continue;
+      // matchedKey is the stored city key (e.g. "רמת גן | אזור דן") or null.
+      // Using the stored key as the canonical identity collapses all API
+      // sub-areas of the same city ("רמת גן - מזרח", "רמת גן - מערב", …)
+      // into one notification and one dedup entry.
+      const matchedKey = isMonitored(city, cityStore.getAll());
+      if (!matchedKey) continue;
       if ((alert.type || '').endsWith(DRILL_SUFFIX)) continue;
 
       if (config.DEBUG) {
         console.log('[DEBUG] Alert:', JSON.stringify(alert, null, 2));
       }
 
-      const key = dedupKey(alert, city);
+      const key = dedupKey(alert, matchedKey);
       if (isDuplicate(key)) continue;
 
       // getLocalizedName is synchronous — no await needed.
-      const cityName = getLocalizedName(city);
+      const cityName = getLocalizedName(matchedKey);
       const message  = buildMessage(cityName, alert, T);
       if (!message) continue;
 
       markSent(key);
-      sendNotification(message, `${alert.type} / ${city}`);
+      await sendNotification(message, `${alert.type} / ${matchedKey}`);
     }
   }
 }
