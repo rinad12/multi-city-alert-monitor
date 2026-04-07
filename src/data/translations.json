@@ -149,6 +149,16 @@
     "he": "🔍 נמצאו %COUNT% אזורים עבור *%QUERY%*. בחר אחד:",
     "ru": "🔍 Найдено %COUNT% зон по запросу *%QUERY%*. Выберите одну:"
   },
+  "districtSelectPrompt": {
+    "en": "🏙 *%CITY%* has several districts. Which one do you want to monitor?",
+    "he": "🏙 ל*%CITY%* יש כמה אזורים. איזה מהם ברצונך לעקוב?",
+    "ru": "🏙 У *%CITY%* несколько районов. Какой из них отслеживать?"
+  },
+  "districtAllCity": {
+    "en": "🏙 All of %CITY%",
+    "he": "🏙 כל %CITY%",
+    "ru": "🏙 Весь %CITY%"
+  },
   "searchConfirm": {
     "en": "🔍 Did you mean: *%CITY%*?",
     "he": "🔍 האם התכוונת ל: *%CITY%*?",

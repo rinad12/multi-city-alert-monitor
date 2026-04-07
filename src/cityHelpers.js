@@ -2,6 +2,7 @@
 
 const path = require('path');
 const { TARGET_LANG } = require('./config');
+const { getLocalisedCityName } = require('./cityDistricts');
 
 // ── Static zone map (populated by scripts/fetch_alert_zones.js) ──────────────
 // Schema: { "<Hebrew name>": { "en": "...", "ru": "..." }, … }
@@ -49,11 +50,16 @@ for (const hebrewKey of Object.keys(alertZones)) {
 function getLocalizedName(hebrewName, lang = TARGET_LANG) {
   if (lang === 'he') return hebrewName;
 
-  // 1. Exact match (full key like "אשדוד | אזור לכיש")
+  // 1. Oref API city/district lookup (covers bare prefixes like "חיפה" and
+  //    district names like "חיפה - כרמל, הדר ועיר תחתית").
+  const fromApi = getLocalisedCityName(hebrewName, lang);
+  if (fromApi) return fromApi;
+
+  // 2. Exact match in alert_zones.json (zone keys like "אשדוד | אזור לכיש")
   const entry = alertZones[hebrewName];
   if (entry && SUPPORTED_LANGS.has(lang) && entry[lang]) return entry[lang];
 
-  // 2. Prefix match (short name like "אשדוד" → first zone that starts with it)
+  // 3. Prefix match (short name → first zone that starts with it)
   const fullKey = prefixIndex.get(hebrewName);
   if (fullKey) {
     const prefixEntry = alertZones[fullKey];
