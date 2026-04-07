@@ -111,27 +111,36 @@ function resolveToHebrew(input) {
  * @param {Set<string>} monitored
  * @returns {boolean}
  */
+/**
+ * Returns the matched monitored city key if `alertCity` should trigger a
+ * notification, or `null` if it should not.
+ *
+ * Returning the *stored* key (rather than a plain boolean) lets callers use
+ * it as the canonical deduplication key so that multiple API sub-areas of the
+ * same city (e.g. "רמת גן - מזרח" and "רמת גן - מערב") are collapsed into a
+ * single notification keyed on "רמת גן | אזור דן".
+ */
 function isMonitored(alertCity, monitored) {
-  if (monitored.has(alertCity)) return true;
+  if (monitored.has(alertCity)) return alertCity;
   for (const m of monitored) {
     // alertCity is a sub-zone of a monitored city prefix
-    if (alertCity.startsWith(m + ' ') || alertCity.startsWith(m + '-') || alertCity.startsWith(m + '–')) return true;
-    // monitored city is a sub-zone of the alert city (user added specific zone)
-    if (m.startsWith(alertCity + ' ') || m.startsWith(alertCity + '-') || m.startsWith(alertCity + '–')) return true;
+    if (alertCity.startsWith(m + ' ') || alertCity.startsWith(m + '-') || alertCity.startsWith(m + '–')) return m;
+    // monitored city is a sub-zone of the alert city
+    if (m.startsWith(alertCity + ' ') || m.startsWith(alertCity + '-') || m.startsWith(alertCity + '–')) return m;
 
-    // Handle zone keys stored from /addcity (format: "רמת גן | אזור דן").
-    // The Oref API sends the bare city name or a hyphen-suffixed sub-area
-    // ("רמת גן - מזרח"), so strip the " | <region>" part and re-check.
+    // Handle zone keys stored by /addcity (format: "רמת גן | אזור דן").
+    // The Oref API sends bare city names or hyphen-suffixed sub-areas
+    // ("רמת גן - מזרח"), so strip " | <region>" and re-check.
     const pipeIdx = m.indexOf(' | ');
     if (pipeIdx !== -1) {
       const cityPrefix = m.slice(0, pipeIdx);
       if (alertCity === cityPrefix ||
           alertCity.startsWith(cityPrefix + ' ') ||
           alertCity.startsWith(cityPrefix + '-') ||
-          alertCity.startsWith(cityPrefix + '–')) return true;
+          alertCity.startsWith(cityPrefix + '–')) return m;
     }
   }
-  return false;
+  return null;
 }
 
 module.exports = { getLocalizedName, translateCity, resolveToHebrew, isMonitored };
