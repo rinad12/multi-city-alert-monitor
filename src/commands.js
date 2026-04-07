@@ -120,7 +120,9 @@ async function finishSetcities(ctx, collected, lang, replyFn) {
 function showDistrictMenu(ctx, sessionType, group, lang) {
   const T = getT(lang);
 
+  const existing = sessions.get(ctx.from.id) || {};
   sessions.set(ctx.from.id, {
+    ...existing,
     type:        sessionType,
     step:        'district_select',
     prefix:      group.prefix,
@@ -128,15 +130,16 @@ function showDistrictMenu(ctx, sessionType, group, lang) {
     districts:   group.districts,
   });
 
-  const allLabel = T.districtAllCity.replace('%CITY%', group.label);
+  const allLabel  = T.districtAllCity.replace('%CITY%', group.label);
   const allAction = sessionType === 'add' ? 'city_ga' : 'sc_ga';
+  const cancelAction = sessionType === 'add' ? 'city_n' : 'sc_skip';
 
   const districtButtons = group.districts.map((d, i) =>
     Markup.button.callback(d.label, `${sessionType === 'add' ? 'city_d' : 'sc_d'}:${i}`)
   );
   const rows = chunk(districtButtons, 2);
   rows.unshift([Markup.button.callback(allLabel, allAction)]);
-  rows.push([Markup.button.callback(T.actionCancelled, 'city_n')]);
+  rows.push([Markup.button.callback(T.actionCancelled, cancelAction)]);
 
   ctx.reply(
     T.districtSelectPrompt.replace('%CITY%', group.label),
